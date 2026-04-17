@@ -1,0 +1,78 @@
+# ============================================================================
+# Broker Workbench - Local Development with Docker Compose
+# ============================================================================
+# Run: docker-compose up --build
+# Frontend: http://localhost:8080
+# Backend:  http://localhost:8000/docs
+# ============================================================================
+
+services:
+  # FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./local.db
+      - ENVIRONMENT=dev
+      # Tell AzureCliCredential exactly where the mounted token cache lives.
+      # Without this, az CLI inside the container may fall back to root's ~/.azure
+      # and miss the host-user token cache.
+      - AZURE_CONFIG_DIR=/home/appuser/.azure
+      # --- Service Principal path (alternative to Azure CLI cache) ---
+      # Uncomment and set these in .env to use a service principal instead of CLI auth.
+      # The SP must have "Cognitive Services OpenAI User" RBAC on the endpoint.
+      # - AZURE_CLIENT_ID=
+      # - AZURE_TENANT_ID=
+      # - AZURE_CLIENT_SECRET=
+    volumes:
+      # Mount source code for hot reload during development
+      - ./backend:/app
+      # Mount Azure CLI config so DefaultAzureCredential can use AzureCliCredential.
+      # On the host run: az login  (then docker-compose up — no re-login needed)
+      # Note: must be read-write; az CLI writes command logs to ~/.azure/commands/
+      - ${HOME}/.azure:/home/appuser/.azure
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend (nginx)
+  frontend:
+    build:
+      context: ./frontend-react
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      # nginx proxies /api to this URL — uses docker-compose service name
+      - API_BACKEND_URL=http://backend:8000
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+
+# Optional: Add a local SQL Server for testing Azure SQL compatibility
+# Uncomment if needed:
+#
+#  sqlserver:
+#    image: mcr.microsoft.com/mssql/server:2022-latest
+#    ports:
+#      - "1433:1433"
+#    environment:
+#      - ACCEPT_EULA=Y
+#      - SA_PASSWORD=YourStrong!Passw0rd
+#    volumes:
+#      - sqldata:/var/opt/mssql
+#
+# volumes:
+#   sqldata:

@@ -1,0 +1,64 @@
+{
+  "dashboard": {
+    "urgent_tasks": 6,
+    "total_premium": 268800.0,
+    "active_policies": 30,
+    "timestamp": "2026-01-30T17:17:46.742054"
+  },
+  "smith_family_quotes": [
+    {
+      "carrier": "Geico",
+      "code": "GE",
+      "premium": 2050.0,
+      "savings": 350.0,
+      "position": "best",
+      "status": "pending"
+    },
+    {
+      "carrier": "Progressive",
+      "code": "PG",
+      "premium": 2090.0,
+      "savings": 310.0,
+      "position": "best",
+      "status": "presented"
+    },
+    {
+      "carrier": "Allstate",
+      "code": "AS",
+      "premium": 2150.0,
+      "savings": 250.0,
+      "position": "best",
+      "status": "presented"
+    },
+    {
+      "carrier": "State Farm",
+      "code": "SF",
+      "premium": 2280.0,
+      "savings": 120.0,
+      "position": "current",
+      "status": "presented"
+    }
+  ],
+  "carriers_status": [
+    {
+      "name": "State Farm",
+      "status": "connected",
+      "response_time": 2.1
+    },
+    {
+      "name": "Allstate",
+      "status": "connected",
+      "response_time": 3.5
+    },
+    {
+      "name": "Progressive",
+      "status": "slow",
+      "response_time": 8.2
+    },
+    {
+      "name": "Geico",
+      "status": "offline",
+      "response_time": null
+    }
+  ]
+}

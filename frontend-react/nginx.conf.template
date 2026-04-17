@@ -1,0 +1,50 @@
+# Map for proper WebSocket connection upgrade header
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+server {
+    listen 80;
+    server_name localhost;
+    root /usr/share/nginx/html;
+    index index.html;
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+
+    # Handle SPA routing
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Proxy API requests to backend
+    # In docker-compose: API_BACKEND_URL=http://backend:8000
+    # In Azure Container Apps: API_BACKEND_URL=https://ca-backend-xxx.azurecontainerapps.io
+    location /api {
+        proxy_pass ${API_BACKEND_URL};
+        proxy_http_version 1.1;
+        # Only set Upgrade/Connection for actual WebSocket upgrades;
+        # for regular REST calls leave Connection at the default (close).
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_set_header Host $proxy_host;
+        # Required for HTTPS upstreams: send correct SNI so Azure Container Apps
+        # can route the request by hostname (without this nginx uses the IP and
+        # Azure resets the SSL handshake with 104 Connection reset by peer)
+        proxy_ssl_server_name on;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_cache_bypass $http_upgrade;
+        # Increase timeouts for AI agent calls which can take 30+ seconds
+        proxy_read_timeout 120s;
+        proxy_send_timeout 120s;
+    }
+
+    # Cache static assets
+    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg|woff|woff2)$ {
+        expires 1y;
+        add_header Cache-Control "public, immutable";
+    }
+}

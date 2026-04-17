@@ -1,0 +1,1758 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insurance Broker Workbench - Unified Desktop</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: #f8f9fa;
+            color: #495057;
+            height: 100vh;
+            overflow: hidden;
+            margin: 0;
+            font-size: 14px;
+        }
+
+        .header {
+            background: #ffffff;
+            padding: 16px 24px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #e9ecef;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+        }
+
+        .logo-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .logo {
+            background: #212529;
+            color: white;
+            padding: 10px 16px;
+            border-radius: 6px;
+            font-weight: 600;
+            font-size: 15px;
+        }
+
+        .search-bar {
+            flex: 1;
+            max-width: 400px;
+            margin: 0 20px;
+            position: relative;
+        }
+
+        .search-bar input {
+            width: 100%;
+            padding: 10px 15px 10px 40px;
+            border: 1px solid #ced4da;
+            border-radius: 6px;
+            font-size: 14px;
+            background: #ffffff;
+            transition: all 0.2s ease;
+        }
+
+        .search-bar input:focus {
+            outline: none;
+            border-color: #495057;
+            box-shadow: 0 0 0 2px rgba(73, 80, 87, 0.1);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #666;
+        }
+
+        .user-section {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .notification-badge {
+            position: relative;
+            background: #ff6b6b;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 15px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+
+        .user-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(45deg, #667eea, #764ba2);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: bold;
+        }
+
+        .main-container {
+            display: grid;
+            grid-template-columns: 280px 1fr var(--ai-panel-width, 320px);
+            height: calc(100vh - 70px);
+            gap: 0;
+            background: #f8f9fa;
+        }
+
+        .sidebar {
+            background: #ffffff;
+            padding: 24px;
+            overflow-y: auto;
+            border-right: 1px solid #e9ecef;
+        }
+
+        .main-content {
+            background: #ffffff;
+            padding: 24px;
+            overflow-y: auto;
+            border-right: 1px solid #e9ecef;
+        }
+
+        .ai-assistant {
+            background: #ffffff;
+            padding: 24px;
+            overflow-y: auto;
+        }
+
+        .section-title {
+            font-size: 16px;
+            font-weight: 600;
+            margin-bottom: 20px;
+            color: #495057;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            letter-spacing: -0.01em;
+        }
+
+        .priority-tasks {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+        }
+
+        .task-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 10px;
+            border-radius: 8px;
+            margin-bottom: 8px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .task-item:hover {
+            background: #f8f9ff;
+            transform: translateX(5px);
+        }
+
+        .priority-high { border-left: 4px solid #ff6b6b; }
+        .priority-medium { border-left: 4px solid #feca57; }
+        .priority-low { border-left: 4px solid #48dbfb; }
+
+        .dashboard-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .dashboard-card {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+        }
+
+        .policy-search {
+            margin-bottom: 20px;
+        }
+
+        .quick-search {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+
+        .search-chip {
+            background: #f8f9fa;
+            color: #495057;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid #e9ecef;
+        }
+
+        .search-chip:hover {
+            background: #495057;
+            color: white;
+            border-color: #495057;
+        }
+
+        .policy-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+
+        .policy-table th,
+        .policy-table td {
+            padding: 12px 16px;
+            text-align: left;
+            border-bottom: 1px solid #e9ecef;
+            font-size: 14px;
+        }
+
+        .policy-table th {
+            background: #f8f9fa;
+            font-weight: 600;
+            color: #495057;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .status-badge {
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+            text-transform: capitalize;
+        }
+
+        .status-active { background: #d4edda; color: #155724; }
+        .status-renewal { background: #fff3cd; color: #856404; }
+        .status-pending { background: #f8d7da; color: #721c24; }
+
+        .carrier-quotes {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .carrier-card {
+            background: #f8f9fa;
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            border: 1px solid #e9ecef;
+        }
+
+        .carrier-card:hover {
+            border-color: #495057;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+        }
+
+        .carrier-logo {
+            width: 44px;
+            height: 44px;
+            background: #495057;
+            border-radius: 50%;
+            margin: 0 auto 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+        }
+
+        .ai-chat {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+        }
+
+        .chat-message {
+            background: #f8f9fa;
+            padding: 12px 16px;
+            border-radius: 8px;
+            margin-bottom: 12px;
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        .chat-message.user {
+            background: #495057;
+            color: white;
+            margin-left: 20px;
+        }
+
+        /* Agent header styling */
+        .chat-message .agent-header {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-weight: 600;
+            color: #667eea;
+            margin-bottom: 8px;
+            font-size: 13px;
+        }
+
+        /* Chat tables */
+        .chat-message table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+            font-size: 12px;
+            background: white;
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .chat-message th {
+            background: #495057;
+            color: white;
+            padding: 8px 10px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .chat-message td {
+            padding: 8px 10px;
+            border-bottom: 1px solid #e9ecef;
+        }
+
+        .chat-message tr:last-child td {
+            border-bottom: none;
+        }
+
+        .chat-message tr:hover td {
+            background: #f8f9fa;
+        }
+
+        /* Status badges in chat */
+        .chat-message .urgency-high {
+            background: #ff6b6b;
+            color: white;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .chat-message .urgency-medium {
+            background: #feca57;
+            color: #333;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        .chat-message .urgency-low {
+            background: #48dbfb;
+            color: #333;
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 600;
+        }
+
+        /* Summary cards in chat */
+        .chat-summary {
+            background: white;
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px 0;
+            border-left: 3px solid #667eea;
+        }
+
+        .chat-summary-title {
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 6px;
+        }
+
+        .chat-summary-value {
+            font-size: 20px;
+            font-weight: 700;
+            color: #667eea;
+        }
+
+        /* Bullet points */
+        .chat-message ul {
+            margin: 8px 0;
+            padding-left: 20px;
+        }
+
+        .chat-message li {
+            margin-bottom: 4px;
+        }
+
+        /* Section headers */
+        .chat-section {
+            font-weight: 600;
+            color: #495057;
+            margin: 12px 0 6px 0;
+            font-size: 13px;
+        }
+
+        .chat-input {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+        }
+
+        .send-btn {
+            background: #667eea;
+            color: white;
+            border: none;
+            padding: 8px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+        }
+
+        /* Resize handle for AI panel */
+        .ai-assistant {
+            position: relative;
+        }
+
+        .resize-handle {
+            position: absolute;
+            left: 0;
+            top: 0;
+            bottom: 0;
+            width: 6px;
+            cursor: ew-resize;
+            background: transparent;
+            transition: background 0.2s ease;
+            z-index: 10;
+        }
+
+        .resize-handle:hover,
+        .resize-handle.dragging {
+            background: #667eea;
+        }
+
+        /* Chat header with refresh button */
+        .chat-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .chat-header .section-title {
+            margin-bottom: 0;
+        }
+
+        .refresh-btn {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 6px 10px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: all 0.2s ease;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+        }
+
+        .refresh-btn:hover {
+            background: #e9ecef;
+            border-color: #ced4da;
+        }
+
+        /* Example prompt suggestions */
+        .prompt-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 12px;
+            border-top: 1px solid #e9ecef;
+        }
+
+        .prompt-pill {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 16px;
+            padding: 6px 12px;
+            font-size: 12px;
+            color: #495057;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            white-space: nowrap;
+        }
+
+        .prompt-pill:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* Follow-up suggestion pills from agent */
+        .followup-suggestions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 12px;
+            padding-top: 10px;
+            border-top: 1px dashed #dee2e6;
+        }
+
+        .followup-pill {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 16px;
+            padding: 8px 14px;
+            font-size: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-shadow: 0 2px 4px rgba(102, 126, 234, 0.3);
+        }
+
+        .followup-pill:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 8px rgba(102, 126, 234, 0.4);
+        }
+
+        .followup-pill:active {
+            transform: translateY(0);
+        }
+
+        .followup-label {
+            font-size: 11px;
+            color: #6c757d;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+
+        /* Chat messages container for scrolling */
+        .chat-messages {
+            max-height: 300px;
+            overflow-y: auto;
+            margin-bottom: 10px;
+        }
+
+        @keyframes fadeOut {
+            from { opacity: 1; transform: translateY(0); }
+            to { opacity: 0; transform: translateY(-10px); }
+        }
+
+        .chat-message.clearing {
+            animation: fadeOut 0.3s ease forwards;
+        }
+
+        .insights-panel {
+            background: #ffffff;
+            border-radius: 8px;
+            padding: 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+            border: 1px solid #e9ecef;
+        }
+
+        .insight-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid #eee;
+        }
+
+        .insight-icon {
+            width: 30px;
+            height: 30px;
+            background: #e8f4fd;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #1976d2;
+        }
+
+        .metric-card {
+            text-align: center;
+            padding: 20px;
+            background: #495057;
+            color: white;
+            border-radius: 8px;
+            border: 1px solid #495057;
+        }
+
+        .metric-number {
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 4px;
+            line-height: 1;
+        }
+
+        .metric-label {
+            font-size: 13px;
+            opacity: 0.85;
+            font-weight: 500;
+        }
+
+        .action-buttons {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 10px 18px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            text-transform: none;
+        }
+
+        .btn-primary {
+            background: #495057;
+            color: white;
+        }
+
+        .btn-secondary {
+            background: #f8f9fa;
+            color: #495057;
+            border: 1px solid #e9ecef;
+        }
+
+        .btn:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+        }
+
+        .real-time-indicator {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 12px;
+            color: #28a745;
+        }
+
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background: #28a745;
+            border-radius: 50%;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.7; transform: scale(1.2); }
+            100% { opacity: 1; transform: scale(1); }
+        }
+
+        .scrollbar-thin::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar-track {
+            background: #f1f1f1;
+        }
+
+        .scrollbar-thin::-webkit-scrollbar-thumb {
+            background: #c1c1c1;
+            border-radius: 2px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="logo-section">
+            <div class="logo">BrokerHub</div>
+            <span class="real-time-indicator" id="connection-indicator">
+                <div class="pulse" id="pulse"></div>
+                <span id="connection-status">Connecting...</span>
+            </span>
+        </div>
+        <div class="search-bar">
+            <div class="search-icon">🔍</div>
+            <input type="text" placeholder="Search policies, clients, carriers... (AI-powered)">
+        </div>
+        <div class="user-section">
+            <div class="notification-badge" id="urgent-badge">-- Urgent</div>
+            <div class="user-avatar">JB</div>
+            <span>John Broker</span>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Left Sidebar -->
+        <aside class="sidebar scrollbar-thin">
+            <!-- Priority Tasks -->
+            <div class="priority-tasks">
+                <h3 class="section-title">Priority Tasks</h3>
+                <div id="priority-tasks-container">
+                <div class="task-item priority-high">
+                    <div>🔴</div>
+                    <div>
+                        <div style="font-weight: 600;">Smith Family - Auto Renewal</div>
+                        <div style="font-size: 12px; color: #666;">Due in 3 days - $2,400 premium</div>
+                    </div>
+                </div>
+                
+                <div class="task-item priority-high">
+                    <div>🔴</div>
+                    <div>
+                        <div style="font-weight: 600;">ABC Corp - Claim Review</div>
+                        <div style="font-size: 12px; color: #666;">$45,000 pending approval</div>
+                    </div>
+                </div>
+                
+                <div class="task-item priority-medium">
+                    <div>🟡</div>
+                    <div>
+                        <div style="font-weight: 600;">Follow up: Davis Enterprise</div>
+                        <div style="font-size: 12px; color: #666;">Quote requested 2 days ago</div>
+                    </div>
+                </div>
+                
+                <div class="task-item priority-low">
+                    <div>🟢</div>
+                    <div>
+                        <div style="font-weight: 600;">Johnson Annual Review</div>
+                        <div style="font-size: 12px; color: #666;">Scheduled for next week</div>
+                    </div>
+                </div>
+                </div>
+            </div>
+
+            <!-- Quick Stats -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                <div class="metric-card">
+                    <div class="metric-number" id="total-premium">--</div>
+                    <div class="metric-label">Total Premium at Risk</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number" id="active-policies">--</div>
+                    <div class="metric-label">Policies in Renewal</div>
+                </div>
+            </div>
+
+            <!-- Additional Metrics -->
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 20px;">
+                <div class="metric-card">
+                    <div class="metric-number" id="total-carriers">--</div>
+                    <div class="metric-label">Active Carriers</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-number" id="total-clients">--</div>
+                    <div class="metric-label">Total Clients</div>
+                </div>
+            </div>
+
+            <!-- Carrier Status -->
+            <div class="dashboard-card">
+                <h3 class="section-title">Carrier Connectivity Status</h3>
+                <div id="carrier-status-list" style="display: flex; flex-direction: column; gap: 8px;">
+                    <div style="color: #666; font-style: italic;">Loading carriers...</div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content scrollbar-thin">
+            <!-- Policy Search & Management -->
+            <div class="policy-search">
+                <h2 class="section-title">Policy Management & Market Intelligence</h2>
+                
+                <div class="quick-search">
+                    <div class="search-chip">Renewals Due</div>
+                    <div class="search-chip">High Value Policies</div>
+                    <div class="search-chip">Recent Claims</div>
+                    <div class="search-chip">Cross-sell Opportunities</div>
+                </div>
+
+                <!-- Policy Table -->
+                <table class="policy-table">
+                    <thead>
+                        <tr>
+                            <th>Policy #</th>
+                            <th>Client</th>
+                            <th>Type</th>
+                            <th>Carrier</th>
+                            <th>Premium</th>
+                            <th>Status</th>
+                            <th>Renewal</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="policy-table-body">
+                        <tr>
+                            <td>POL12344</td>
+                            <td>Smith Family</td>
+                            <td>Auto</td>
+                            <td>State Farm</td>
+                            <td>$2,400</td>
+                            <td><span class="status-badge status-renewal">Renewal Due</span></td>
+                            <td>01/15/2026</td>
+                            <td>
+                                <button class="btn btn-primary">Get Quotes</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>POL98765</td>
+                            <td>ABC Corp</td>
+                            <td>Commercial</td>
+                            <td>Allstate</td>
+                            <td>$15,600</td>
+                            <td><span class="status-badge status-active">Active</span></td>
+                            <td>08/20/2026</td>
+                            <td>
+                                <button class="btn btn-secondary">Review</button>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>POL54321</td>
+                            <td>Davis Enterprise</td>
+                            <td>Property</td>
+                            <td>Progressive</td>
+                            <td>$8,900</td>
+                            <td><span class="status-badge status-pending">Quote Pending</span></td>
+                            <td>-</td>
+                            <td>
+                                <button class="btn btn-primary">Follow Up</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <!-- Real-time Carrier Quotes -->
+            <div class="dashboard-grid">
+                <div class="dashboard-card">
+                    <h3 class="section-title">Real-Time Carrier Quotes - Smith Family Auto</h3>
+                    <div class="carrier-quotes">
+                        <div class="carrier-card">
+                            <div class="carrier-logo">SF</div>
+                            <div style="font-weight: bold;">State Farm</div>
+                            <div style="color: #28a745; font-weight: bold;">$2,280</div>
+                            <div style="font-size: 11px; color: #666;">Current Carrier</div>
+                        </div>
+                        <div class="carrier-card">
+                            <div class="carrier-logo">AS</div>
+                            <div style="font-weight: bold;">Allstate</div>
+                            <div style="color: #1976d2; font-weight: bold;">$2,150</div>
+                            <div style="font-size: 11px; color: #28a745;">Save $130</div>
+                        </div>
+                        <div class="carrier-card">
+                            <div class="carrier-logo">PG</div>
+                            <div style="font-weight: bold;">Progressive</div>
+                            <div style="color: #1976d2; font-weight: bold;">$2,090</div>
+                            <div style="font-size: 11px; color: #28a745;">Save $190</div>
+                        </div>
+                        <div class="carrier-card">
+                            <div class="carrier-logo">GE</div>
+                            <div style="font-weight: bold;">Geico</div>
+                            <div style="color: #666;">Quote Pending...</div>
+                            <div style="font-size: 11px; color: #666;">API Timeout</div>
+                        </div>
+                    </div>
+                    <div class="action-buttons">
+                        <button class="btn btn-primary">Present Quotes to Client</button>
+                        <button class="btn btn-secondary">Schedule Call</button>
+                        <button class="btn btn-secondary">Send Email Summary</button>
+                    </div>
+                </div>
+
+                <div class="dashboard-card">
+                    <h3 class="section-title">Cross-Sell Opportunities</h3>
+                    <div style="display: flex; flex-direction: column; gap: 12px;">
+                        <div style="background: #f8f9ff; padding: 12px; border-radius: 8px; border-left: 4px solid #667eea;">
+                            <div style="font-weight: bold; margin-bottom: 5px;">Smith Family</div>
+                            <div style="font-size: 13px; color: #666; margin-bottom: 8px;">Auto policy holder - No home insurance</div>
+                            <div style="font-size: 13px; color: #1976d2; font-weight: 500;">Estimated Home Premium: $1,200-1,800</div>
+                            <button class="btn btn-primary" style="margin-top: 8px; font-size: 11px;">Get Home Quote</button>
+                        </div>
+                        <div style="background: #fff8e1; padding: 12px; border-radius: 8px; border-left: 4px solid #ffc107;">
+                            <div style="font-weight: bold; margin-bottom: 5px;">Johnson Family</div>
+                            <div style="font-size: 13px; color: #666; margin-bottom: 8px;">Teen driver added - No umbrella policy</div>
+                            <div style="font-size: 13px; color: #f57c00; font-weight: 500;">Recommended: $1M Umbrella</div>
+                            <button class="btn btn-secondary" style="margin-top: 8px; font-size: 11px;">Schedule Review</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Document Management Integration -->
+            <div class="dashboard-card">
+                <h3 class="section-title">Integrated Document Management</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+                    <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; cursor: pointer;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">📝 Smith Auto Policy</div>
+                        <div style="font-size: 12px; color: #666;">Last updated: 2 days ago</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; cursor: pointer;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">📋 ABC Claim Report</div>
+                        <div style="font-size: 12px; color: #666;">Pending review</div>
+                    </div>
+                    <div style="background: #f8f9fa; padding: 12px; border-radius: 8px; cursor: pointer;">
+                        <div style="font-weight: bold; margin-bottom: 5px;">📊 Q1 Portfolio Review</div>
+                        <div style="font-size: 12px; color: #666;">Generated by AI</div>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- Right AI Assistant Panel -->
+        <aside class="ai-assistant scrollbar-thin">
+            <div class="resize-handle" id="resize-handle"></div>
+            <!-- AI Chat Assistant -->
+            <div class="ai-chat">
+                <div class="chat-header">
+                    <h3 class="section-title">AI Assistant</h3>
+                    <button class="refresh-btn" onclick="clearChat()" title="Clear chat">
+                        🔄 Clear
+                    </button>
+                </div>
+                
+                <div class="chat-messages" id="chat-messages">
+                    <div class="chat-message">
+                        I've analyzed the Smith Family renewal. Progressive offers the best value at $190 savings. Should I draft a comparison presentation?
+                    </div>
+                    
+                    <div class="chat-message user">
+                        Yes, include umbrella policy recommendation too
+                    </div>
+                    
+                    <div class="chat-message">
+                        Perfect! I'll create a comprehensive presentation including:
+                        • Auto quote comparison (3 carriers)
+                        • Umbrella policy benefits ($1M for $285/year)
+                        • Total savings opportunity: $190 auto + $285 umbrella
+                        • Next steps and timeline
+                        
+                        Presentation ready in 30 seconds.
+                    </div>
+                </div>
+                
+                <div class="chat-input">
+                    <input type="text" placeholder="Ask about policies, claims, or get recommendations...">
+                    <button class="send-btn">Send</button>
+                </div>
+                
+                <div class="prompt-suggestions">
+                    <span class="prompt-pill" onclick="usePrompt('Analyze claims impact for CLI001')">📊 Claims impact</span>
+                    <span class="prompt-pill" onclick="usePrompt('Find cross-sell opportunities')">🎯 Cross-sell</span>
+                    <span class="prompt-pill" onclick="usePrompt('Get a quote for commercial auto')">💰 Get quote</span>
+                    <span class="prompt-pill" onclick="usePrompt('Show upcoming renewals')">📅 Renewals</span>
+                </div>
+            </div>
+
+            <!-- AI Insights Panel -->
+            <div class="insights-panel">
+                <h3 class="section-title">Smart Insights</h3>
+                
+                <div class="insight-item">
+                    <div class="insight-icon">📈</div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 13px;">Portfolio Growth</div>
+                        <div style="font-size: 11px; color: #666;">12% increase opportunity identified</div>
+                    </div>
+                </div>
+                
+                <div class="insight-item">
+                    <div class="insight-icon">⚠️</div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 13px;">Risk Alert</div>
+                        <div style="font-size: 11px; color: #666;">3 clients underinsured for property</div>
+                    </div>
+                </div>
+                
+                <div class="insight-item">
+                    <div class="insight-icon">🎯</div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 13px;">Best Actions</div>
+                        <div style="font-size: 11px; color: #666;">Focus on renewals this week</div>
+                    </div>
+                </div>
+                
+                <div class="insight-item">
+                    <div class="insight-icon">💡</div>
+                    <div>
+                        <div style="font-weight: 600; font-size: 13px;">Market Trend</div>
+                        <div style="font-size: 11px; color: #666;">Auto rates decreasing 3-5% this quarter</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div class="dashboard-card">
+                <h3 class="section-title">Quick Actions</h3>
+                <div style="display: flex; flex-direction: column; gap: 8px;">
+                    <button class="btn btn-primary" style="width: 100%;">Generate Portfolio Summary</button>
+                    <button class="btn btn-secondary" style="width: 100%;">Schedule Renewal Calls</button>
+                    <button class="btn btn-secondary" style="width: 100%;">Export Client Reports</button>
+                    <button class="btn btn-secondary" style="width: 100%;">Check Market Rates</button>
+                </div>
+            </div>
+
+            <!-- Semantic Understanding Demo -->
+            <div class="dashboard-card">
+                <h3 class="section-title">Semantic Understanding</h3>
+                <div style="font-size: 13px; line-height: 1.4;">
+                    <div style="margin-bottom: 10px;">
+                        <strong>Query:</strong> "Show me high-risk clients"
+                    </div>
+                    <div style="background: #f1f3f4; padding: 8px; border-radius: 6px; margin-bottom: 10px;">
+                        <strong>AI Understanding:</strong><br>
+                        → Previous claims + Young drivers<br>
+                        → High-value properties in flood zones<br>
+                        → Commercial clients with safety violations
+                    </div>
+                    <div style="color: #1976d2; font-size: 12px;">
+                        Found 7 clients requiring attention
+                    </div>
+                </div>
+            </div>
+        </aside>
+    </div>
+
+    <script>
+        // ===== API Configuration =====
+        // For local dev: uses localhost:8000
+        // For Azure: Set API_BACKEND_URL environment variable or update this value after deployment
+        // Example deployed URL: https://ca-backend-brokerworkbench-dev.bluegrass-12345.eastus2.azurecontainerapps.io
+        const API_BASE_URL = window.API_BACKEND_URL || 'http://localhost:8000';
+        
+        console.log('API Base URL:', API_BASE_URL);
+        
+        // ===== Data Cache =====
+        const cache = {
+            policies: [],
+            clients: [],
+            carriers: [],
+            renewals: [],
+            dashboard: null
+        };
+
+        // ===== Helper Functions =====
+        function formatCurrency(amount) {
+            if (amount >= 1000000) {
+                return '$' + (amount / 1000000).toFixed(1) + 'M';
+            } else if (amount >= 1000) {
+                return '$' + (amount / 1000).toFixed(0) + 'K';
+            }
+            return new Intl.NumberFormat('en-US', {
+                style: 'currency',
+                currency: 'USD',
+                minimumFractionDigits: 0
+            }).format(amount);
+        }
+
+        function formatDate(dateStr) {
+            if (!dateStr) return '-';
+            return new Date(dateStr).toLocaleDateString('en-US', {
+                month: '2-digit',
+                day: '2-digit',
+                year: 'numeric'
+            });
+        }
+
+        function getStatusClass(status) {
+            const map = {
+                'active': 'status-active',
+                'pending': 'status-pending',
+                'expired': 'status-renewal',
+                'renewal': 'status-renewal'
+            };
+            return map[status?.toLowerCase()] || 'status-active';
+        }
+
+        // ===== API Functions =====
+        async function checkConnection() {
+            const statusEl = document.getElementById('connection-status');
+            const pulseEl = document.getElementById('pulse');
+            const indicatorEl = document.getElementById('connection-indicator');
+            
+            try {
+                const response = await fetch(`${API_BASE_URL}/`);
+                const data = await response.json();
+                
+                statusEl.textContent = 'Live Data Connected';
+                pulseEl.style.background = '#28a745';
+                indicatorEl.style.color = '#28a745';
+                return true;
+            } catch (error) {
+                console.error('API Connection failed:', error);
+                statusEl.textContent = 'API Disconnected';
+                pulseEl.style.background = '#dc3545';
+                pulseEl.style.animation = 'none';
+                indicatorEl.style.color = '#dc3545';
+                return false;
+            }
+        }
+
+        async function loadDashboard() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/renewals/dashboard`);
+                cache.dashboard = await response.json();
+                renderDashboardMetrics();
+            } catch (error) {
+                console.error('Failed to load dashboard:', error);
+            }
+        }
+
+        async function loadPolicies() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/policies`);
+                cache.policies = await response.json();
+            } catch (error) {
+                console.error('Failed to load policies:', error);
+            }
+        }
+
+        async function loadClients() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/clients`);
+                cache.clients = await response.json();
+            } catch (error) {
+                console.error('Failed to load clients:', error);
+            }
+        }
+
+        async function loadCarriers() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/carriers`);
+                cache.carriers = await response.json();
+                renderCarrierStatus();
+            } catch (error) {
+                console.error('Failed to load carriers:', error);
+            }
+        }
+
+        async function loadRenewals() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/renewals`);
+                const data = await response.json();
+                cache.renewals = data.renewals || [];  // Extract the renewals array from response
+                renderPriorityTasks();
+            } catch (error) {
+                console.error('Failed to load renewals:', error);
+            }
+        }
+
+        // ===== Render Functions =====
+        function renderDashboardMetrics() {
+            const d = cache.dashboard;
+            if (!d) return;
+
+            document.getElementById('total-premium').textContent = formatCurrency(d.total_premium_at_risk);
+            document.getElementById('active-policies').textContent = d.total_policies_in_renewal;
+            document.getElementById('urgent-badge').textContent = `${d.critical_count} Urgent`;
+            document.getElementById('total-carriers').textContent = cache.carriers.length;
+            document.getElementById('total-clients').textContent = cache.clients.length;
+        }
+
+        function renderCarrierStatus() {
+            const container = document.getElementById('carrier-status-list');
+            if (!cache.carriers.length) {
+                container.innerHTML = '<div style="color: #666;">No carriers found</div>';
+                return;
+            }
+
+            container.innerHTML = cache.carriers.slice(0, 6).map(carrier => `
+                <div style="display: flex; justify-content: space-between; align-items: center;">
+                    <span>${carrier.name}</span>
+                    <span style="color: #28a745; font-size: 12px;">● Connected</span>
+                </div>
+            `).join('');
+        }
+
+        function renderPriorityTasks() {
+            const container = document.getElementById('priority-tasks-container');
+            if (!cache.renewals.length) {
+                container.innerHTML = '<div style="color: #666; padding: 10px;">No urgent tasks</div>';
+                return;
+            }
+
+            container.innerHTML = cache.renewals.slice(0, 4).map(renewal => {
+                const priorityClass = renewal.urgency_level === 'Critical' ? 'priority-high' :
+                                      renewal.urgency_level === 'High' ? 'priority-medium' : 'priority-low';
+                const icon = renewal.urgency_level === 'Critical' ? '🔴' :
+                            renewal.urgency_level === 'High' ? '🟡' : '🟢';
+                
+                // Find client name
+                const policy = cache.policies.find(p => p.id === renewal.policy_id);
+                const client = policy ? cache.clients.find(c => c.id === policy.client_id) : null;
+                const clientName = client?.name || 'Unknown Client';
+
+                return `
+                    <div class="task-item ${priorityClass}" onclick="viewRenewal('${renewal.policy_id}')">
+                        <div>${icon}</div>
+                        <div>
+                            <div style="font-weight: 600;">${clientName} - ${renewal.policy_type} Renewal</div>
+                            <div style="font-size: 12px; color: #666;">Due in ${renewal.days_until_expiration} days - ${formatCurrency(renewal.annual_premium)}</div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function renderPolicyTable() {
+            const tbody = document.getElementById('policy-table-body');
+            if (!cache.policies.length) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; color: #666;">No policies found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = cache.policies.map(policy => {
+                const client = cache.clients.find(c => c.id === policy.client_id) || { name: 'Unknown' };
+                const carrier = cache.carriers.find(c => c.id === policy.carrier_id) || { name: 'Unknown' };
+                const renewal = cache.renewals.find(r => r.policy_id === policy.id);
+                
+                let statusText = policy.status;
+                let statusClass = getStatusClass(policy.status);
+                
+                if (renewal && renewal.days_until_expiration <= 30) {
+                    statusText = 'Renewal Due';
+                    statusClass = 'status-renewal';
+                }
+
+                const actionBtn = renewal && renewal.urgency_level === 'Critical' 
+                    ? `<button class="btn btn-primary" onclick="getQuotes('${policy.id}')">Get Quotes</button>`
+                    : `<button class="btn btn-secondary" onclick="viewPolicy('${policy.id}')">Review</button>`;
+
+                return `
+                    <tr>
+                        <td>${policy.policy_number}</td>
+                        <td>${client.name}</td>
+                        <td>${policy.policy_type}</td>
+                        <td>${carrier.name}</td>
+                        <td>${formatCurrency(policy.annual_premium)}</td>
+                        <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                        <td>${formatDate(policy.expiration_date)}</td>
+                        <td>${actionBtn}</td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        // ===== Format Agent Response =====
+        function formatAgentResponse(agent, response) {
+            let html = `<div class="agent-header">🤖 ${agent}</div>`;
+            
+            // Check if the response contains a markdown-style table (pipes)
+            if (response.includes('|') && response.includes('---')) {
+                html += parseMarkdownTable(response);
+            } else {
+                // Parse regular text with bullet points and sections
+                html += parseTextResponse(response);
+            }
+            
+            // Parse and add clickable follow-up suggestions
+            const followups = parseFollowUpQuestions(response);
+            if (followups.length > 0) {
+                html += '<div class="followup-suggestions">';
+                html += '<div class="followup-label">💡 Quick follow-ups:</div>';
+                for (const followup of followups) {
+                    const escaped = followup.replace(/'/g, "\\'");
+                    html += `<button class="followup-pill" onclick="usePrompt('${escaped}')">${followup}</button>`;
+                }
+                html += '</div>';
+            }
+            
+            return html;
+        }
+        
+        function parseFollowUpQuestions(response) {
+            const followups = [];
+            const lines = response.split('\n');
+            
+            // Pattern 1: Full sentences that are questions (end with ?)
+            for (const line of lines) {
+                const trimmed = line.trim();
+                // Look for question sentences
+                if (trimmed.endsWith('?') && trimmed.length > 15 && trimmed.length < 120) {
+                    // Clean up the question
+                    let question = trimmed;
+                    // Remove leading bullet/dash if present
+                    if (question.startsWith('- ') || question.startsWith('• ')) {
+                        question = question.substring(2);
+                    }
+                    followups.push(question);
+                }
+            }
+            
+            // Pattern 2: Sentences starting with action phrases (even without ?)
+            const actionPhrases = [
+                /Would you like (.+?)(?:\?|$)/gi,
+                /Do you want (.+?)(?:\?|$)/gi,
+                /Should I (.+?)(?:\?|$)/gi,
+                /Can I (.+?)(?:\?|$)/gi,
+                /Let me know if you.d like (.+?)(?:\.|$)/gi
+            ];
+            
+            for (const pattern of actionPhrases) {
+                let match;
+                while ((match = pattern.exec(response)) !== null) {
+                    const fullMatch = match[0].trim();
+                    if (fullMatch.length > 10 && fullMatch.length < 120 && !followups.includes(fullMatch)) {
+                        // Convert to an actionable prompt
+                        let prompt = fullMatch;
+                        // Turn "Would you like X?" into "Yes, X" for cleaner action
+                        if (prompt.toLowerCase().startsWith('would you like ')) {
+                            prompt = 'Yes, ' + prompt.substring(15).replace(/\?$/, '');
+                        } else if (prompt.toLowerCase().startsWith('should i ')) {
+                            prompt = 'Yes, please ' + prompt.substring(9).replace(/\?$/, '');
+                        }
+                        followups.push(prompt);
+                    }
+                }
+            }
+            
+            // Dedupe and limit to 3
+            return [...new Set(followups)].slice(0, 3);
+        }
+        
+        function parseMarkdownTable(response) {
+            const lines = response.split('\n');
+            let html = '';
+            let inTable = false;
+            let tableRows = [];
+            let headers = [];
+            
+            for (let line of lines) {
+                line = line.trim();
+                
+                // Skip separator lines
+                if (line.match(/^\|[-:\s|]+\|$/)) {
+                    continue;
+                }
+                
+                // Table row
+                if (line.startsWith('|') && line.endsWith('|')) {
+                    const cells = line.split('|').filter(c => c.trim()).map(c => c.trim());
+                    
+                    if (!inTable) {
+                        // First row is headers
+                        headers = cells;
+                        inTable = true;
+                    } else {
+                        tableRows.push(cells);
+                    }
+                } else {
+                    // Flush table if we were in one
+                    if (inTable && tableRows.length > 0) {
+                        html += buildTable(headers, tableRows);
+                        inTable = false;
+                        tableRows = [];
+                        headers = [];
+                    }
+                    
+                    // Regular text line
+                    if (line) {
+                        html += `<div>${formatLine(line)}</div>`;
+                    }
+                }
+            }
+            
+            // Flush remaining table
+            if (inTable && tableRows.length > 0) {
+                html += buildTable(headers, tableRows);
+            }
+            
+            return html;
+        }
+        
+        function buildTable(headers, rows) {
+            // Limit to most important columns for readability
+            const priorityCols = ['Policy Type', 'Carrier', 'Policy Number', 'Expiration Date', 'Days Until Renewal', 'Urgency', 'Premium', 'Coverage Limit'];
+            
+            let displayHeaders = headers;
+            let displayIndices = headers.map((_, i) => i);
+            
+            // If too many columns, prioritize important ones
+            if (headers.length > 6) {
+                displayIndices = [];
+                displayHeaders = [];
+                for (const col of priorityCols) {
+                    const idx = headers.findIndex(h => h.toLowerCase().includes(col.toLowerCase()));
+                    if (idx !== -1 && displayIndices.length < 6) {
+                        displayIndices.push(idx);
+                        displayHeaders.push(headers[idx]);
+                    }
+                }
+                // If we didn't find enough, use first 6
+                if (displayHeaders.length < 4) {
+                    displayHeaders = headers.slice(0, 6);
+                    displayIndices = [0, 1, 2, 3, 4, 5].filter(i => i < headers.length);
+                }
+            }
+            
+            let html = '<table><thead><tr>';
+            for (const h of displayHeaders) {
+                html += `<th>${h}</th>`;
+            }
+            html += '</tr></thead><tbody>';
+            
+            for (const row of rows) {
+                html += '<tr>';
+                for (const idx of displayIndices) {
+                    let cell = row[idx] || '';
+                    
+                    // Style urgency cells
+                    if (cell.toLowerCase() === 'high' || cell.toLowerCase() === 'critical') {
+                        cell = `<span class="urgency-high">${cell}</span>`;
+                    } else if (cell.toLowerCase() === 'medium') {
+                        cell = `<span class="urgency-medium">${cell}</span>`;
+                    } else if (cell.toLowerCase() === 'low') {
+                        cell = `<span class="urgency-low">${cell}</span>`;
+                    }
+                    
+                    // Format currency
+                    if (cell.match(/^\$[\d,]+$/)) {
+                        cell = `<strong>${cell}</strong>`;
+                    }
+                    
+                    html += `<td>${cell}</td>`;
+                }
+                html += '</tr>';
+            }
+            
+            html += '</tbody></table>';
+            return html;
+        }
+        
+        function parseTextResponse(response) {
+            const lines = response.split('\n');
+            let html = '';
+            let inList = false;
+            
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+                
+                // Bullet points
+                if (line.startsWith('•') || line.startsWith('-') || line.startsWith('*')) {
+                    if (!inList) {
+                        html += '<ul>';
+                        inList = true;
+                    }
+                    html += `<li>${formatLine(line.substring(1).trim())}</li>`;
+                } else {
+                    if (inList) {
+                        html += '</ul>';
+                        inList = false;
+                    }
+                    
+                    // Section headers (lines ending with :)
+                    if (line.endsWith(':') && line.length < 50) {
+                        html += `<div class="chat-section">${line}</div>`;
+                    } else {
+                        html += `<div>${formatLine(line)}</div>`;
+                    }
+                }
+            }
+            
+            if (inList) html += '</ul>';
+            return html;
+        }
+        
+        function formatLine(text) {
+            // Bold text between ** **
+            text = text.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+            // Currency formatting
+            text = text.replace(/\$(\d{1,3}(?:,\d{3})*(?:\.\d{2})?)/g, '<strong>$$$1</strong>');
+            return text;
+        }
+
+        // ===== Action Functions =====
+        async function viewPolicy(policyId) {
+            try {
+                const response = await fetch(`${API_BASE_URL}/api/policies/${policyId}/renewal`);
+                const info = await response.json();
+                alert(`Policy: ${info.policy_number}\nType: ${info.policy_type}\nPremium: ${formatCurrency(info.annual_premium)}\nDays until expiration: ${info.days_until_expiration}\nPriority Score: ${info.priority_score.toFixed(1)}\nUrgency: ${info.urgency_level}`);
+            } catch (error) {
+                console.error('Failed to load policy:', error);
+            }
+        }
+
+        async function viewRenewal(policyId) {
+            await viewPolicy(policyId);
+        }
+
+        function getQuotes(policyId) {
+            const policy = cache.policies.find(p => p.id === policyId);
+            const client = policy ? cache.clients.find(c => c.id === policy.client_id) : null;
+            alert(`Getting quotes for ${client?.name || 'Unknown'} - ${policy?.policy_type || 'Unknown'} policy\n\nThis feature will connect to carrier APIs in Phase 2!`);
+        }
+
+        // ===== Chat Functions =====
+        function initChat() {
+            const chatInput = document.querySelector('.chat-input input');
+            const sendBtn = document.querySelector('.send-btn');
+            
+            async function sendMessage() {
+                const message = chatInput.value.trim();
+                if (!message) return;
+
+                // Add user message to the chat-messages container
+                const chatMessages = document.getElementById('chat-messages');
+                
+                const userMsg = document.createElement('div');
+                userMsg.className = 'chat-message user';
+                userMsg.textContent = message;
+                chatMessages.appendChild(userMsg);
+                
+                chatInput.value = '';
+
+                // Show loading indicator
+                const loadingMsg = document.createElement('div');
+                loadingMsg.className = 'chat-message';
+                loadingMsg.textContent = '🤔 Thinking...';
+                loadingMsg.id = 'loading-msg';
+                chatMessages.appendChild(loadingMsg);
+
+                // Determine which agent to use based on message content
+                let agentType = 'quote';  // default
+                const lowerMsg = message.toLowerCase();
+                if (lowerMsg.includes('cross-sell') || lowerMsg.includes('coverage gap') || lowerMsg.includes('opportunity')) {
+                    agentType = 'crosssell';
+                } else if (lowerMsg.includes('claim') || lowerMsg.includes('renewal impact') || lowerMsg.includes('loss')) {
+                    agentType = 'claims';
+                }
+
+                // Extract client ID if mentioned
+                let clientId = null;
+                const clientMatch = message.match(/CLI\d{3}/i) || message.match(/client\s+(\w+)/i);
+                if (clientMatch) {
+                    clientId = clientMatch[0].toUpperCase();
+                }
+                // Also check for client names
+                const clientByName = cache.clients.find(c => 
+                    lowerMsg.includes(c.name.toLowerCase().split(' ')[0].toLowerCase())
+                );
+                if (clientByName) {
+                    clientId = clientByName.id;
+                }
+
+                try {
+                    // Call the real AI agent endpoint
+                    const response = await fetch(`${API_BASE_URL}/api/agent/chat`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            message: message,
+                            agent: agentType,
+                            client_id: clientId
+                        })
+                    });
+
+                    // Remove loading message
+                    document.getElementById('loading-msg')?.remove();
+
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.detail || 'Agent request failed');
+                    }
+
+                    const data = await response.json();
+                    
+                    const aiMsg = document.createElement('div');
+                    aiMsg.className = 'chat-message';
+                    aiMsg.innerHTML = formatAgentResponse(data.agent, data.response);
+                    chatMessages.appendChild(aiMsg);
+
+                } catch (error) {
+                    console.error('Agent error:', error);
+                    document.getElementById('loading-msg')?.remove();
+                    
+                    const errorMsg = document.createElement('div');
+                    errorMsg.className = 'chat-message';
+                    errorMsg.style.color = '#dc3545';
+                    errorMsg.textContent = `Error: ${error.message}`;
+                    chatMessages.appendChild(errorMsg);
+                }
+
+                // Scroll to bottom
+                chatMessages.scrollTop = chatMessages.scrollHeight;
+            }
+            
+            sendBtn.addEventListener('click', sendMessage);
+            chatInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendMessage();
+            });
+        }
+
+        // ===== Clear Chat Function =====
+        function clearChat() {
+            const chatMessages = document.getElementById('chat-messages');
+            const messages = chatMessages.querySelectorAll('.chat-message');
+            
+            // Animate out each message
+            messages.forEach((msg, i) => {
+                setTimeout(() => {
+                    msg.classList.add('clearing');
+                }, i * 50);
+            });
+            
+            // Remove after animation
+            setTimeout(() => {
+                chatMessages.innerHTML = `
+                    <div class="chat-message">
+                        Hi! I'm your AI assistant. How can I help you today? Try asking about policies, claims analysis, or cross-sell opportunities.
+                    </div>
+                `;
+            }, messages.length * 50 + 300);
+        }
+
+        // ===== Use Prompt Suggestion =====
+        function usePrompt(text) {
+            const chatInput = document.querySelector('.chat-input input');
+            chatInput.value = text;
+            chatInput.focus();
+            // Optionally auto-send
+            document.querySelector('.send-btn').click();
+        }
+
+        // ===== Resize Panel Functions =====
+        function initResize() {
+            const handle = document.getElementById('resize-handle');
+            const container = document.querySelector('.main-container');
+            const aiPanel = document.querySelector('.ai-assistant');
+            
+            // Restore saved width
+            const savedWidth = localStorage.getItem('aiPanelWidth');
+            if (savedWidth) {
+                container.style.setProperty('--ai-panel-width', savedWidth);
+            }
+            
+            let isResizing = false;
+            let startX, startWidth;
+            
+            handle.addEventListener('mousedown', (e) => {
+                isResizing = true;
+                startX = e.clientX;
+                startWidth = aiPanel.offsetWidth;
+                handle.classList.add('dragging');
+                document.body.style.cursor = 'ew-resize';
+                document.body.style.userSelect = 'none';
+                e.preventDefault();
+            });
+            
+            document.addEventListener('mousemove', (e) => {
+                if (!isResizing) return;
+                
+                const diff = startX - e.clientX;
+                let newWidth = startWidth + diff;
+                
+                // Clamp between 280px and 900px (wider for better readability)
+                newWidth = Math.max(280, Math.min(900, newWidth));
+                
+                container.style.setProperty('--ai-panel-width', newWidth + 'px');
+            });
+            
+            document.addEventListener('mouseup', () => {
+                if (isResizing) {
+                    isResizing = false;
+                    handle.classList.remove('dragging');
+                    document.body.style.cursor = '';
+                    document.body.style.userSelect = '';
+                    
+                    // Save preference
+                    const currentWidth = getComputedStyle(container).getPropertyValue('--ai-panel-width');
+                    localStorage.setItem('aiPanelWidth', currentWidth.trim());
+                }
+            });
+        }
+
+        // ===== Initialize App =====
+        async function init() {
+            console.log('🚀 Initializing Broker Workbench...');
+            
+            const connected = await checkConnection();
+            
+            if (connected) {
+                // Load all data in parallel
+                await Promise.all([
+                    loadPolicies(),
+                    loadClients(),
+                    loadCarriers(),
+                    loadRenewals(),
+                    loadDashboard()
+                ]);
+                
+                // Render everything
+                renderDashboardMetrics();
+                renderPolicyTable();
+                renderPriorityTasks();
+                renderCarrierStatus();
+            }
+            
+            // Initialize chat
+            initChat();
+            
+            // Initialize resize functionality
+            initResize();
+            
+            // Add click handlers for search chips
+            document.querySelectorAll('.search-chip').forEach(chip => {
+                chip.addEventListener('click', () => {
+                    document.querySelectorAll('.search-chip').forEach(c => c.style.background = '');
+                    document.querySelectorAll('.search-chip').forEach(c => c.style.color = '');
+                    chip.style.background = '#495057';
+                    chip.style.color = 'white';
+                });
+            });
+
+            // Add click handlers for task items
+            document.querySelectorAll('.task-item').forEach(item => {
+                item.addEventListener('click', () => {
+                    item.style.background = '#e3f2fd';
+                    setTimeout(() => item.style.background = '', 2000);
+                });
+            });
+        }
+
+        // Start the app
+        document.addEventListener('DOMContentLoaded', init);
+    </script>
+</body>
+</html>

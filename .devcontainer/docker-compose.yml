@@ -1,0 +1,62 @@
+# ============================================================================
+# Dev Container Docker Compose
+# ============================================================================
+# Extends the root docker-compose.yml and adds a devcontainer service.
+# The backend & frontend services run alongside the dev container so you
+# can test the full stack while editing code in VS Code.
+# ============================================================================
+
+services:
+  # The dev container where VS Code attaches
+  devcontainer:
+    build:
+      context: ..
+      dockerfile: .devcontainer/Dockerfile
+    volumes:
+      - ..:/workspaces/${LOCAL_WORKSPACE_FOLDER_BASENAME:-Hackathon_v2}:cached
+    command: sleep infinity
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./local.db
+      - ENVIRONMENT=dev
+    # Allow Docker-in-Docker (for running docker-compose from inside)
+    privileged: true
+
+  # FastAPI Backend (same as root compose, with source mount for hot reload)
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    env_file:
+      - ../.env
+    environment:
+      - DATABASE_URL=sqlite+aiosqlite:///./local.db
+      - ENVIRONMENT=dev
+    volumes:
+      - ../backend:/app
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # React Frontend (nginx serving production build)
+  frontend:
+    build:
+      context: ../frontend-react
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    environment:
+      - API_BACKEND_URL=http://localhost:8000
+    depends_on:
+      - backend
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/"]
+      interval: 30s
+      timeout: 3s
+      retries: 3

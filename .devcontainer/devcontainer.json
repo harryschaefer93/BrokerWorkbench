@@ -1,0 +1,102 @@
+// ============================================================================
+// Broker Workbench - Dev Container Configuration
+// ============================================================================
+// Opens the full repo in a containerized dev environment with Python 3.11,
+// Node 20, ODBC drivers, Azure CLI, and all required VS Code extensions.
+//
+// Usage: Open in VS Code → "Reopen in Container" (or Codespaces)
+// ============================================================================
+{
+  "name": "Broker Workbench",
+  "dockerComposeFile": "docker-compose.yml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspaces/${localWorkspaceFolderBasename}",
+
+  // Features add common dev tools
+  "features": {
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {},
+    "ghcr.io/devcontainers/features/git:1": {},
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "20"
+    }
+  },
+
+  // Extensions to pre-install
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        // Python
+        "ms-python.python",
+        "ms-python.vscode-pylance",
+        "ms-python.debugpy",
+
+        // JavaScript/TypeScript + React
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode",
+        "bradlc.vscode-tailwindcss",
+
+        // Docker
+        "ms-azuretools.vscode-docker",
+
+        // Azure
+        "ms-azuretools.vscode-azurefunctions",
+        "ms-azuretools.vscode-bicep",
+        "ms-vscode.azure-account",
+
+        // REST/API testing
+        "humao.rest-client",
+
+        // General DX
+        "eamodio.gitlens",
+        "GitHub.copilot",
+        "GitHub.copilot-chat"
+      ],
+      "settings": {
+        // Python
+        "python.defaultInterpreterPath": "/workspaces/${localWorkspaceFolderBasename}/venv/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "[python]": {
+          "editor.defaultFormatter": "ms-python.python",
+          "editor.formatOnSave": true
+        },
+
+        // TypeScript/React
+        "[typescript]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true
+        },
+        "[typescriptreact]": {
+          "editor.defaultFormatter": "esbenp.prettier-vscode",
+          "editor.formatOnSave": true
+        },
+
+        // Files
+        "files.exclude": {
+          "**/__pycache__": true,
+          "**/*.pyc": true
+        },
+
+        // Terminal
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  },
+
+  // Ports to forward to the host
+  "forwardPorts": [
+    8000,  // FastAPI backend
+    8080,  // React frontend (nginx)
+    5173   // Vite dev server (if running `npm run dev` directly)
+  ],
+  "portsAttributes": {
+    "8000": { "label": "Backend API", "onAutoForward": "notify" },
+    "8080": { "label": "Frontend (nginx)", "onAutoForward": "openBrowser" },
+    "5173": { "label": "Vite Dev Server", "onAutoForward": "notify" }
+  },
+
+  // Lifecycle scripts
+  "postCreateCommand": "bash .devcontainer/post-create.sh",
+
+  // Run as non-root vscode user
+  "remoteUser": "vscode"
+}

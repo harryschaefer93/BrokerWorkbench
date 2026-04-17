@@ -1,0 +1,902 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Insurance Broker Workbench - Database ER Diagram</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f8f9fa;
+            margin: 0;
+            padding: 20px;
+            color: #495057;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 12px;
+            padding: 30px;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        .title {
+            text-align: center;
+            color: #212529;
+            font-size: 28px;
+            font-weight: 700;
+            margin-bottom: 10px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #6c757d;
+            font-size: 16px;
+            margin-bottom: 40px;
+        }
+
+        .database-section {
+            margin-bottom: 50px;
+        }
+
+        .database-title {
+            font-size: 24px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 3px solid #495057;
+        }
+
+        .master-db { border-color: #28a745; color: #28a745; }
+        .transactional-db { border-color: #007bff; color: #007bff; }
+
+        .er-diagram {
+            display: grid;
+            gap: 20px;
+            margin: 20px 0;
+        }
+
+        .master-layout {
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+        }
+
+        .transactional-layout {
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        }
+
+        .table {
+            border: 2px solid #495057;
+            border-radius: 8px;
+            background: white;
+            overflow: hidden;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            transition: transform 0.2s ease;
+        }
+
+        .table:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(0,0,0,0.15);
+        }
+
+        .table-header {
+            background: #495057;
+            color: white;
+            padding: 12px 16px;
+            font-weight: 600;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .master-table .table-header { background: #28a745; }
+        .transactional-table .table-header { background: #007bff; }
+
+        .table-icon {
+            font-size: 18px;
+        }
+
+        .field-list {
+            padding: 0;
+            margin: 0;
+        }
+
+        .field {
+            padding: 8px 16px;
+            border-bottom: 1px solid #e9ecef;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 13px;
+        }
+
+        .field:last-child {
+            border-bottom: none;
+        }
+
+        .field:nth-child(odd) {
+            background: #f8f9fa;
+        }
+
+        .field-name {
+            font-weight: 500;
+            color: #495057;
+        }
+
+        .field-type {
+            color: #6c757d;
+            font-size: 11px;
+            text-transform: uppercase;
+        }
+
+        .primary-key {
+            background: #fff3cd !important;
+            border-left: 4px solid #ffc107;
+        }
+
+        .primary-key .field-name {
+            font-weight: 700;
+            color: #856404;
+        }
+
+        .foreign-key {
+            background: #d1ecf1 !important;
+            border-left: 4px solid #17a2b8;
+        }
+
+        .foreign-key .field-name {
+            font-weight: 600;
+            color: #0c5460;
+        }
+
+        .relationships {
+            margin-top: 30px;
+            background: #f8f9fa;
+            padding: 20px;
+            border-radius: 8px;
+            border: 2px dashed #6c757d;
+        }
+
+        .relationship-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #495057;
+            margin-bottom: 15px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .relationship {
+            margin: 10px 0;
+            padding: 10px;
+            background: white;
+            border-radius: 6px;
+            border-left: 4px solid #17a2b8;
+            font-size: 14px;
+        }
+
+        .relationship-type {
+            font-weight: 600;
+            color: #17a2b8;
+        }
+
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: white;
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: 1px solid #e9ecef;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        }
+
+        .legend-color {
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+        }
+
+        .legend-pk { background: #ffc107; }
+        .legend-fk { background: #17a2b8; }
+        .legend-master { background: #28a745; }
+        .legend-trans { background: #007bff; }
+
+        @media (max-width: 768px) {
+            .er-diagram {
+                grid-template-columns: 1fr;
+            }
+            
+            .legend {
+                flex-direction: column;
+                align-items: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="title">Insurance Broker Workbench</h1>
+        <div class="subtitle">Database Entity-Relationship Diagram</div>
+
+        <!-- Legend -->
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-color legend-pk"></div>
+                <span>Primary Key</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color legend-fk"></div>
+                <span>Foreign Key</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color legend-master"></div>
+                <span>Master Database</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-color legend-trans"></div>
+                <span>Transactional Database</span>
+            </div>
+        </div>
+
+        <!-- Master Database Section -->
+        <div class="database-section">
+            <h2 class="database-title master-db">📊 Master Data Database (Reference Data)</h2>
+            <div class="er-diagram master-layout">
+                
+                <!-- Carriers Table -->
+                <div class="table master-table">
+                    <div class="table-header">
+                        <span class="table-icon">🏢</span>
+                        <span>carriers</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">carrier_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">carrier_name</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">carrier_code</span>
+                            <span class="field-type">VARCHAR(10)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">api_endpoint</span>
+                            <span class="field-type">VARCHAR(255)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">api_status</span>
+                            <span class="field-type">VARCHAR(20)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">rating</span>
+                            <span class="field-type">VARCHAR(10)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">specialty_lines</span>
+                            <span class="field-type">TEXT</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">market_share</span>
+                            <span class="field-type">DECIMAL(5,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">created_at</span>
+                            <span class="field-type">TIMESTAMP</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">updated_at</span>
+                            <span class="field-type">TIMESTAMP</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Clients Table -->
+                <div class="table master-table">
+                    <div class="table-header">
+                        <span class="table-icon">👥</span>
+                        <span>clients</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">client_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">client_name</span>
+                            <span class="field-type">VARCHAR(200)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">client_type</span>
+                            <span class="field-type">VARCHAR(20)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">business_industry</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">primary_contact_name</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">email</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">phone</span>
+                            <span class="field-type">VARCHAR(20)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">address_line1</span>
+                            <span class="field-type">VARCHAR(200)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">city</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">state</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">zip_code</span>
+                            <span class="field-type">VARCHAR(10)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">risk_score</span>
+                            <span class="field-type">INT</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">customer_since</span>
+                            <span class="field-type">DATE</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">total_premium_ytd</span>
+                            <span class="field-type">DECIMAL(12,2)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Product Lines Table -->
+                <div class="table master-table">
+                    <div class="table-header">
+                        <span class="table-icon">📋</span>
+                        <span>product_lines</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">product_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">product_name</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">product_category</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">base_premium_range</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">risk_factors</span>
+                            <span class="field-type">TEXT (JSON)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">coverage_options</span>
+                            <span class="field-type">TEXT (JSON)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">target_market</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Market Rates Table -->
+                <div class="table master-table">
+                    <div class="table-header">
+                        <span class="table-icon">💹</span>
+                        <span>market_rates</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">rate_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">carrier_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">product_category</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">risk_profile</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">base_rate</span>
+                            <span class="field-type">DECIMAL(10,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">rate_factor</span>
+                            <span class="field-type">DECIMAL(5,3)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">effective_date</span>
+                            <span class="field-type">DATE</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">expiration_date</span>
+                            <span class="field-type">DATE</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">market_region</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Transactional Database Section -->
+        <div class="database-section">
+            <h2 class="database-title transactional-db">⚡ Transactional Database (Operational Data)</h2>
+            <div class="er-diagram transactional-layout">
+                
+                <!-- Policies Table -->
+                <div class="table transactional-table">
+                    <div class="table-header">
+                        <span class="table-icon">📄</span>
+                        <span>policies</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">policy_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">policy_number</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">client_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">carrier_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">product_category</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">policy_status</span>
+                            <span class="field-type">VARCHAR(20)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">premium_amount</span>
+                            <span class="field-type">DECIMAL(12,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">deductible</span>
+                            <span class="field-type">DECIMAL(10,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">coverage_limit</span>
+                            <span class="field-type">DECIMAL(15,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">effective_date</span>
+                            <span class="field-type">DATE</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">expiration_date</span>
+                            <span class="field-type">DATE</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">renewal_date</span>
+                            <span class="field-type">DATE</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">commission_rate</span>
+                            <span class="field-type">DECIMAL(5,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">commission_amount</span>
+                            <span class="field-type">DECIMAL(10,2)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quotes Table -->
+                <div class="table transactional-table">
+                    <div class="table-header">
+                        <span class="table-icon">💰</span>
+                        <span>quotes</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">quote_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">client_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">carrier_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">product_category</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">quote_number</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">quoted_premium</span>
+                            <span class="field-type">DECIMAL(12,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">coverage_details</span>
+                            <span class="field-type">TEXT (JSON)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">quote_status</span>
+                            <span class="field-type">VARCHAR(20)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">competitive_position</span>
+                            <span class="field-type">VARCHAR(20)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">savings_vs_current</span>
+                            <span class="field-type">DECIMAL(10,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">quote_source</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">response_time_seconds</span>
+                            <span class="field-type">INT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tasks Table -->
+                <div class="table transactional-table">
+                    <div class="table-header">
+                        <span class="table-icon">✅</span>
+                        <span>tasks</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">task_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">client_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">policy_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">task_type</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">priority_level</span>
+                            <span class="field-type">VARCHAR(10)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">task_title</span>
+                            <span class="field-type">VARCHAR(200)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">task_description</span>
+                            <span class="field-type">TEXT</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">due_date</span>
+                            <span class="field-type">DATE</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">status</span>
+                            <span class="field-type">VARCHAR(20)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">potential_value</span>
+                            <span class="field-type">DECIMAL(12,2)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Claims Table -->
+                <div class="table transactional-table">
+                    <div class="table-header">
+                        <span class="table-icon">🚨</span>
+                        <span>claims</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">claim_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">policy_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">claim_number</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">claim_type</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">claim_amount</span>
+                            <span class="field-type">DECIMAL(12,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">claim_status</span>
+                            <span class="field-type">VARCHAR(30)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">date_of_loss</span>
+                            <span class="field-type">DATE</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">reported_date</span>
+                            <span class="field-type">DATE</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">settlement_amount</span>
+                            <span class="field-type">DECIMAL(12,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">impact_on_renewal</span>
+                            <span class="field-type">VARCHAR(20)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Interactions Table -->
+                <div class="table transactional-table">
+                    <div class="table-header">
+                        <span class="table-icon">🤖</span>
+                        <span>ai_interactions</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">interaction_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">user_id</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">session_id</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">interaction_type</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">user_query</span>
+                            <span class="field-type">TEXT</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">ai_response</span>
+                            <span class="field-type">TEXT</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">context_data</span>
+                            <span class="field-type">TEXT (JSON)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">confidence_score</span>
+                            <span class="field-type">DECIMAL(3,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">processing_time_ms</span>
+                            <span class="field-type">INT</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Documents Table -->
+                <div class="table transactional-table">
+                    <div class="table-header">
+                        <span class="table-icon">📁</span>
+                        <span>documents</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">document_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">client_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">policy_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">document_type</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">document_name</span>
+                            <span class="field-type">VARCHAR(255)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">file_path</span>
+                            <span class="field-type">VARCHAR(500)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">file_size_bytes</span>
+                            <span class="field-type">INT</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">mime_type</span>
+                            <span class="field-type">VARCHAR(100)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">generated_by</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">tags</span>
+                            <span class="field-type">TEXT (JSON)</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Cross-sell Opportunities Table -->
+                <div class="table transactional-table">
+                    <div class="table-header">
+                        <span class="table-icon">🎯</span>
+                        <span>cross_sell_opportunities</span>
+                    </div>
+                    <div class="field-list">
+                        <div class="field primary-key">
+                            <span class="field-name">opportunity_id</span>
+                            <span class="field-type">INT PK</span>
+                        </div>
+                        <div class="field foreign-key">
+                            <span class="field-name">client_id</span>
+                            <span class="field-type">INT FK</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">current_product_category</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">recommended_product_category</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">opportunity_type</span>
+                            <span class="field-type">VARCHAR(50)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">estimated_premium</span>
+                            <span class="field-type">DECIMAL(10,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">confidence_score</span>
+                            <span class="field-type">DECIMAL(3,2)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">status</span>
+                            <span class="field-type">VARCHAR(20)</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">reasoning</span>
+                            <span class="field-type">TEXT</span>
+                        </div>
+                        <div class="field">
+                            <span class="field-name">ai_generated</span>
+                            <span class="field-type">BOOLEAN</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Relationships Section -->
+        <div class="relationships">
+            <div class="relationship-title">
+                <span>🔗</span>
+                <span>Database Relationships</span>
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Master Database:</span>
+                market_rates.carrier_id → carriers.carrier_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                policies.client_id → clients.client_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                policies.carrier_id → carriers.carrier_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                quotes.client_id → clients.client_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                quotes.carrier_id → carriers.carrier_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                claims.policy_id → policies.policy_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                tasks.client_id → clients.client_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                tasks.policy_id → policies.policy_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                documents.client_id → clients.client_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                documents.policy_id → policies.policy_id (Many-to-One)
+            </div>
+            
+            <div class="relationship">
+                <span class="relationship-type">Transactional Database:</span>
+                cross_sell_opportunities.client_id → clients.client_id (Many-to-One)
+            </div>
+        </div>
+    </div>
+</body>
+</html>
