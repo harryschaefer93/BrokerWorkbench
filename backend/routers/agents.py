@@ -357,22 +357,32 @@ async def _run_agent(request: ChatRequest) -> ChatResponse:
     from agents.crosssell_agent import CrossSellAgent
     from agents.claims_agent import ClaimsImpactAgent
     from agents.triage_agent import TriageAgent
-    
+    from openai import AsyncAzureOpenAI
+    from azure.identity import get_bearer_token_provider
+    from agents.config import get_credential
+
     # Build message with context if client_id provided
     message = request.message
     if request.client_id:
         message = f"[Context: Working with client ID {request.client_id}] {request.message}"
-    
-    # Select and run agent
+
+    # Select agent (with triage routing)
     try:
         if request.agent == AgentType.TRIAGE:
-            agent = TriageAgent()
-            result = await agent.run(message, conversation_id=request.conversation_id)
-            return ChatResponse(
-                response=result.get("response", ""),
-                agent=result.get("agent", "BrokerAgent"),
-                conversation_id=result.get("conversation_id"),
-            )
+            triage = TriageAgent()
+            classification = await triage.classify(message)
+            intent = classification["intent"]
+            logger.info("Triage routed to: %s (confidence=%s)", intent, classification.get("confidence"))
+
+            specialists = {
+                "claims": ClaimsImpactAgent,
+                "crosssell": CrossSellAgent,
+                "quote": QuoteComparisonAgent,
+            }
+            if intent in specialists:
+                agent = specialists[intent]()
+            else:
+                agent = triage
         elif request.agent == AgentType.QUOTE:
             agent = QuoteComparisonAgent()
         elif request.agent == AgentType.CROSSSELL:
@@ -381,19 +391,86 @@ async def _run_agent(request: ChatRequest) -> ChatResponse:
             agent = ClaimsImpactAgent()
         else:
             raise HTTPException(status_code=400, detail=f"Unknown agent: {request.agent}")
-        
-        result = await agent.run(message, conversation_id=request.conversation_id)
-        
+
+        config = agent.config
+        token_provider = get_bearer_token_provider(
+            get_credential(), "https://cognitiveservices.azure.com/.default"
+        )
+        client = AsyncAzureOpenAI(
+            azure_endpoint=config.endpoint,
+            azure_ad_token_provider=token_provider,
+            api_version=config.api_version,
+        )
+
+        # Build messages with conversation history for multi-turn support
+        messages = [{"role": "system", "content": agent.instructions}]
+        history = request.history
+        if history:
+            for h in history[-10:]:
+                if h.get("role") in ("user", "assistant") and h.get("content"):
+                    messages.append({"role": h["role"], "content": h["content"]})
+        messages.append({"role": "user", "content": message})
+        tools = agent.get_tool_definitions()
+
+        # Tool-calling loop (max 3 rounds)
+        max_tool_rounds = 3
+        tool_round = 0
+        while tool_round < max_tool_rounds:
+            tool_round += 1
+            response = await client.chat.completions.create(
+                model=config.model_deployment,
+                messages=messages,
+                tools=tools if tools else None,
+                tool_choice="auto" if tools else None,
+                max_tokens=config.max_tokens,
+                temperature=config.temperature,
+            )
+            assistant_msg = response.choices[0].message
+
+            if not assistant_msg.tool_calls:
+                break
+
+            messages.append({
+                "role": "assistant",
+                "content": assistant_msg.content,
+                "tool_calls": [
+                    {
+                        "id": tc.id,
+                        "type": "function",
+                        "function": {"name": tc.function.name, "arguments": tc.function.arguments},
+                    }
+                    for tc in assistant_msg.tool_calls
+                ],
+            })
+
+            for tc in assistant_msg.tool_calls:
+                func_args = json.loads(tc.function.arguments)
+                logger.info("Tool call: %s(%s)", tc.function.name, func_args)
+                result = agent.handle_tool_call(tc.function.name, func_args)
+                messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
+
+        # Final response (if last round ended with tool calls, do one more non-tool call)
+        if assistant_msg.tool_calls:
+            response = await client.chat.completions.create(
+                model=config.model_deployment,
+                messages=messages,
+                max_tokens=config.max_tokens,
+                temperature=config.temperature,
+            )
+            assistant_msg = response.choices[0].message
+
         return ChatResponse(
-            response=result.get("response", ""),
-            agent=result.get("agent", str(request.agent)),
-            conversation_id=result.get("conversation_id"),
+            response=assistant_msg.content or "I couldn't generate a response.",
+            agent=agent.name,
+            conversation_id=request.conversation_id,
         )
     except ValueError as e:
         raise HTTPException(
             status_code=500,
             detail=f"Configuration error: {str(e)}. Please set AZURE_AI_FOUNDRY_ENDPOINT in .env"
         )
+    except HTTPException:
+        raise
     except Exception as e:
         _raise_agent_http_error(e)
 

@@ -1,0 +1,58 @@
+{
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.17",
+  "version": "1.0.0",
+  "id": "ce8f24bc-4c90-42c4-aa82-3cccad46d22f",
+  "developer": {
+    "name": "BrokerWorkbench",
+    "websiteUrl": "https://ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io",
+    "privacyUrl": "https://ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io",
+    "termsOfUseUrl": "https://ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io"
+  },
+  "name": {
+    "short": "BrokerWorkbench",
+    "full": "BrokerWorkbench Insurance AI Assistant"
+  },
+  "description": {
+    "short": "AI-powered insurance broker assistant",
+    "full": "BrokerWorkbench brings your insurance AI agents into Microsoft Teams. Get claims analysis, carrier quotes, cross-sell opportunities, and renewal tracking — the same agents available in your web workbench, now in Teams."
+  },
+  "icons": {
+    "outline": "outline.png",
+    "color": "color.png"
+  },
+  "accentColor": "#0078D4",
+  "bots": [
+    {
+      "botId": "ce8f24bc-4c90-42c4-aa82-3cccad46d22f",
+      "scopes": ["personal", "team", "groupChat"],
+      "supportsFiles": false,
+      "isNotificationOnly": false,
+      "commandLists": [
+        {
+          "scopes": ["personal"],
+          "commands": [
+            {
+              "title": "renewals",
+              "description": "Show upcoming policy renewals"
+            },
+            {
+              "title": "claims",
+              "description": "Analyze claims impact for a client"
+            },
+            {
+              "title": "quotes",
+              "description": "Compare carrier quotes"
+            },
+            {
+              "title": "crosssell",
+              "description": "Find cross-sell opportunities"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "permissions": ["identity", "messageTeamMembers"],
+  "validDomains": []
+}

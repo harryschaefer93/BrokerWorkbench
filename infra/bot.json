@@ -1,0 +1,270 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "metadata": {
+    "_generator": {
+      "name": "bicep",
+      "version": "0.40.2.10011",
+      "templateHash": "12401730057807355097"
+    }
+  },
+  "parameters": {
+    "microsoftAppId": {
+      "type": "string",
+      "metadata": {
+        "description": "Microsoft App ID for the bot (from Entra App Registration)"
+      }
+    },
+    "microsoftAppPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Microsoft App Password/Secret for the bot"
+      }
+    },
+    "tenantId": {
+      "type": "string",
+      "defaultValue": "[subscription().tenantId]",
+      "metadata": {
+        "description": "Tenant ID for the bot registration"
+      }
+    },
+    "botContainerImage": {
+      "type": "string",
+      "defaultValue": "broker-bot:v1",
+      "metadata": {
+        "description": "Container image for the bot (repo:tag within ACR)"
+      }
+    },
+    "acrName": {
+      "type": "string",
+      "defaultValue": "acrbrokerworkbenchdev2qdxa3smrnc7a",
+      "metadata": {
+        "description": "Name of the existing ACR"
+      }
+    },
+    "containerAppEnvName": {
+      "type": "string",
+      "defaultValue": "cae-brokerworkbench-dev",
+      "metadata": {
+        "description": "Name of the existing Container App Environment"
+      }
+    },
+    "backendFqdn": {
+      "type": "string",
+      "defaultValue": "ca-backend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io",
+      "metadata": {
+        "description": "FQDN of the existing backend Container App"
+      }
+    },
+    "baseName": {
+      "type": "string",
+      "defaultValue": "brokerworkbench",
+      "metadata": {
+        "description": "Base name for resource naming"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "defaultValue": "dev",
+      "metadata": {
+        "description": "Environment label (dev, staging, prod)"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Azure region — defaults to resource group location"
+      }
+    }
+  },
+  "variables": {
+    "resourceSuffix": "[format('{0}-{1}', parameters('baseName'), parameters('environment'))]",
+    "tags": {
+      "project": "BrokerWorkbench",
+      "environment": "[parameters('environment')]"
+    },
+    "acrPullRoleId": "7f951dda-4ed3-4680-a7ca-43fe172d538d"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ManagedIdentity/userAssignedIdentities",
+      "apiVersion": "2023-01-31",
+      "name": "[format('id-bot-{0}', variables('resourceSuffix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]"
+    },
+    {
+      "type": "Microsoft.Authorization/roleAssignments",
+      "apiVersion": "2022-04-01",
+      "scope": "[resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName'))]",
+      "name": "[guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-bot-{0}', variables('resourceSuffix'))), variables('acrPullRoleId'))]",
+      "properties": {
+        "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-bot-{0}', variables('resourceSuffix'))), '2023-01-31').principalId]",
+        "principalType": "ServicePrincipal",
+        "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', variables('acrPullRoleId'))]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-bot-{0}', variables('resourceSuffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.BotService/botServices",
+      "apiVersion": "2022-09-15",
+      "name": "[format('bot-{0}', variables('resourceSuffix'))]",
+      "location": "global",
+      "kind": "azurebot",
+      "sku": {
+        "name": "F0"
+      },
+      "tags": "[variables('tags')]",
+      "properties": {
+        "displayName": "BrokerWorkbench Bot",
+        "endpoint": "[format('https://{0}/api/messages', reference(resourceId('Microsoft.App/containerApps', format('ca-bot-{0}', variables('resourceSuffix'))), '2024-03-01').configuration.ingress.fqdn)]",
+        "msaAppId": "[parameters('microsoftAppId')]",
+        "msaAppType": "SingleTenant",
+        "msaAppTenantId": "[parameters('tenantId')]"
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.App/containerApps', format('ca-bot-{0}', variables('resourceSuffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.BotService/botServices/channels",
+      "apiVersion": "2022-09-15",
+      "name": "[format('{0}/{1}', format('bot-{0}', variables('resourceSuffix')), 'MsTeamsChannel')]",
+      "location": "global",
+      "properties": {
+        "channelName": "MsTeamsChannel",
+        "properties": {
+          "isEnabled": true
+        }
+      },
+      "dependsOn": [
+        "[resourceId('Microsoft.BotService/botServices', format('bot-{0}', variables('resourceSuffix')))]"
+      ]
+    },
+    {
+      "type": "Microsoft.App/containerApps",
+      "apiVersion": "2024-03-01",
+      "name": "[format('ca-bot-{0}', variables('resourceSuffix'))]",
+      "location": "[parameters('location')]",
+      "tags": "[variables('tags')]",
+      "identity": {
+        "type": "UserAssigned",
+        "userAssignedIdentities": {
+          "[format('{0}', resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-bot-{0}', variables('resourceSuffix'))))]": {}
+        }
+      },
+      "properties": {
+        "managedEnvironmentId": "[resourceId('Microsoft.App/managedEnvironments', parameters('containerAppEnvName'))]",
+        "configuration": {
+          "registries": [
+            {
+              "server": "[reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer]",
+              "identity": "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-bot-{0}', variables('resourceSuffix')))]"
+            }
+          ],
+          "ingress": {
+            "external": true,
+            "targetPort": 3978,
+            "transport": "auto",
+            "allowInsecure": false
+          },
+          "secrets": [
+            {
+              "name": "microsoft-app-password",
+              "value": "[parameters('microsoftAppPassword')]"
+            }
+          ]
+        },
+        "template": {
+          "containers": [
+            {
+              "name": "broker-bot",
+              "image": "[format('{0}/{1}', reference(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), '2023-07-01').loginServer, parameters('botContainerImage'))]",
+              "resources": {
+                "cpu": "[json('0.25')]",
+                "memory": "0.5Gi"
+              },
+              "env": [
+                {
+                  "name": "MICROSOFT_APP_ID",
+                  "value": "[parameters('microsoftAppId')]"
+                },
+                {
+                  "name": "MICROSOFT_APP_PASSWORD",
+                  "secretRef": "microsoft-app-password"
+                },
+                {
+                  "name": "BACKEND_URL",
+                  "value": "[format('https://{0}', parameters('backendFqdn'))]"
+                },
+                {
+                  "name": "BOT_PORT",
+                  "value": "3978"
+                }
+              ],
+              "probes": [
+                {
+                  "type": "Liveness",
+                  "httpGet": {
+                    "path": "/health",
+                    "port": 3978
+                  },
+                  "initialDelaySeconds": 10,
+                  "periodSeconds": 30
+                }
+              ]
+            }
+          ],
+          "scale": {
+            "minReplicas": 1,
+            "maxReplicas": 1
+          }
+        }
+      },
+      "dependsOn": [
+        "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', parameters('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-bot-{0}', variables('resourceSuffix'))), variables('acrPullRoleId')))]",
+        "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-bot-{0}', variables('resourceSuffix')))]"
+      ]
+    }
+  ],
+  "outputs": {
+    "botContainerAppFqdn": {
+      "type": "string",
+      "metadata": {
+        "description": "FQDN of the bot Container App"
+      },
+      "value": "[reference(resourceId('Microsoft.App/containerApps', format('ca-bot-{0}', variables('resourceSuffix'))), '2024-03-01').configuration.ingress.fqdn]"
+    },
+    "botMessagingEndpoint": {
+      "type": "string",
+      "metadata": {
+        "description": "Full messaging endpoint URL for the bot"
+      },
+      "value": "[format('https://{0}/api/messages', reference(resourceId('Microsoft.App/containerApps', format('ca-bot-{0}', variables('resourceSuffix'))), '2024-03-01').configuration.ingress.fqdn)]"
+    },
+    "botAppName": {
+      "type": "string",
+      "metadata": {
+        "description": "Bot Service resource name"
+      },
+      "value": "[format('bot-{0}', variables('resourceSuffix'))]"
+    },
+    "botIdentityClientId": {
+      "type": "string",
+      "metadata": {
+        "description": "Managed Identity client ID — use for any downstream RBAC grants"
+      },
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-bot-{0}', variables('resourceSuffix'))), '2023-01-31').clientId]"
+    },
+    "botIdentityPrincipalId": {
+      "type": "string",
+      "metadata": {
+        "description": "Managed Identity principal ID"
+      },
+      "value": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-bot-{0}', variables('resourceSuffix'))), '2023-01-31').principalId]"
+    }
+  }
+}
