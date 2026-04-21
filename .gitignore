@@ -41,3 +41,5 @@ backend/local.db
 # Project brief (local context, not committed)
 BRIEF.md
 
+.playwright-mcp/
+*.png

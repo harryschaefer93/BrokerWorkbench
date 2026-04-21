@@ -14,8 +14,10 @@ server {
     gzip on;
     gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
 
-    # Handle SPA routing
+    # Handle SPA routing — prevent caching index.html so new JS bundles load
     location / {
+        add_header Cache-Control "no-cache, no-store, must-revalidate";
+        add_header Pragma "no-cache";
         try_files $uri $uri/ /index.html;
     }
 
