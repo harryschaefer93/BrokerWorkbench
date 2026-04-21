@@ -88,6 +88,18 @@ graph TB
 
 A broker opens the web workbench to review their book of business, then flips to Teams and asks the same agent about a client's claims history — and gets the same quality answer.
 
+## 📸 Screenshots
+
+### Web Dashboard
+The full workbench with priority tasks, $463K premium at risk, policy table, and carrier connectivity status.
+
+![Web Dashboard](docs/screenshots/web-dashboard.png)
+
+### AI Chat — Claims Agent
+The Claims Impact Agent analyzes a client's loss history, shows expected premium impact, and suggests follow-up actions — all streamed token-by-token in real time.
+
+![AI Chat Panel](docs/screenshots/web-ai-chat.png)
+
 ## 🌐 Live Demo
 
 | Surface | URL |
