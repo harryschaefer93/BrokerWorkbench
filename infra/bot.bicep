@@ -176,6 +176,10 @@ resource botContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
               secretRef: 'microsoft-app-password'
             }
             {
+              name: 'MICROSOFT_APP_TENANT_ID'
+              value: tenantId
+            }
+            {
               name: 'BACKEND_URL'
               value: 'https://${backendFqdn}'
             }

@@ -8,6 +8,7 @@ class Settings(BaseSettings):
 
     microsoft_app_id: str
     microsoft_app_password: str
+    microsoft_app_tenant_id: str = ""
     backend_url: str = "http://localhost:8000"
     bot_port: int = 3978
 

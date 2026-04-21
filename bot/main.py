@@ -22,6 +22,7 @@ settings = Settings()
 adapter_settings = BotFrameworkAdapterSettings(
     app_id=settings.microsoft_app_id,
     app_password=settings.microsoft_app_password,
+    channel_auth_tenant=settings.microsoft_app_tenant_id or None,
 )
 adapter = BotFrameworkAdapter(adapter_settings)
 
