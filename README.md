@@ -5,6 +5,11 @@ An AI-powered insurance broker workbench that surfaces the same intelligent agen
 ## 🏗️ Architecture
 
 ```mermaid
+---
+config:
+  flowchart:
+    curve: linear
+---
 graph TB
     subgraph Clients["🖥️ Client Surfaces"]
         Browser["🌐 Web Browser"]
@@ -13,14 +18,15 @@ graph TB
 
     subgraph ACA["☁️ Azure Container Apps Environment"]
         FE["<b>Frontend</b><br/>React 18 · Vite · nginx"]
-        Bot["<b>Teams Bot</b><br/>Bot Framework · Python"]
-        BE["<b>Backend API</b><br/>FastAPI · Python 3.11"]
+        Bot["<b>Teams Bot</b><br/>Bot Framework SDK · Python"]
 
-        subgraph Agents["🧠 AI Agents"]
-            Triage["Triage Agent<br/><i>Intent Classification</i>"]
-            Claims["Claims Impact<br/><i>Renewal Pricing</i>"]
-            CrossSell["Cross-Sell<br/><i>Coverage Gaps</i>"]
-            Quote["Quote Comparison<br/><i>Carrier Rates</i>"]
+        subgraph Backend["<b>Backend API</b> — FastAPI · Python 3.11"]
+            subgraph Agents["🧠 AI Agents — Azure OpenAI Python SDK"]
+                Triage["Triage Agent<br/><i>Intent Classification</i>"]
+                Claims["Claims Impact<br/><i>Renewal Pricing</i>"]
+                CrossSell["Cross-Sell<br/><i>Coverage Gaps</i>"]
+                Quote["Quote Comparison<br/><i>Carrier Rates</i>"]
+            end
         end
     end
 
@@ -40,20 +46,21 @@ graph TB
 
     %% Client → App flows
     Browser -- "HTTPS" --> FE
-    FE -- "nginx /api proxy" --> BE
+    FE -- "nginx /api proxy" --> Backend
     Teams -- "Messages" --> BotSvc
     BotSvc -- "Bot Framework" --> Bot
-    Bot -- "POST /api/agent/chat" --> BE
+    Bot -- "POST /api/agent/chat" --> Backend
 
-    %% Backend → Agents → Services
-    BE --> Triage
+    %% Agent routing
     Triage -.-> Claims
     Triage -.-> CrossSell
     Triage -.-> Quote
-    BE -- "Async OpenAI SDK<br/>SSE streaming" --> AI
-    BE -- "SQLAlchemy async" --> SQL
-    BE -- "Secret refs" --> KV
-    BE -. "Telemetry" .-> MON
+
+    %% Backend → Services
+    Agents -- "AsyncAzureOpenAI<br/>SSE streaming" --> AI
+    Backend -- "SQLAlchemy async" --> SQL
+    Backend -- "Secret refs" --> KV
+    Backend -. "Telemetry" .-> MON
 
     %% Infra & Identity
     ACR -- "AcrPull" --> ACA
@@ -64,6 +71,7 @@ graph TB
     %% Styles
     style Clients fill:#f0f4ff,stroke:#4a6fa5,color:#1a1a1a
     style ACA fill:#e1f0ff,stroke:#0078d4,color:#1a1a1a
+    style Backend fill:#dbeafe,stroke:#2563eb,color:#1a1a1a
     style Agents fill:#fff8e1,stroke:#f9a825,color:#1a1a1a
     style Platform fill:#f3e5f5,stroke:#7b1fa2,color:#1a1a1a
     style Identity fill:#e8f5e9,stroke:#388e3c,color:#1a1a1a
