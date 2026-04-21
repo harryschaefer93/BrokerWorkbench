@@ -73,6 +73,42 @@ async def agent_chat_stream(request: ChatRequest):
     )
 
 
+def _get_contextual_suggestions(agent_type: str, message: str, response_text: str) -> list[str]:
+    """Return contextual follow-up suggestions based on agent type and conversation."""
+    msg_lower = message.lower()
+
+    if agent_type == "claims":
+        if "impact" in msg_lower or "analysis" in msg_lower:
+            return ["Show loss ratio trend", "Compare to industry benchmark", "View claim details"]
+        elif "history" in msg_lower or "filed" in msg_lower:
+            return ["Analyze claims impact on renewal", "Show claims by severity", "Flag high-risk policies"]
+        else:
+            return ["Show claims history", "Analyze impact on premiums", "Identify loss trends"]
+    elif agent_type == "quote":
+        if "compare" in msg_lower or "carrier" in msg_lower:
+            return ["Request formal quotes", "Show coverage comparison", "Rank by price"]
+        elif "request" in msg_lower or "formal" in msg_lower:
+            return ["Compare across carriers", "Review terms and conditions", "Check carrier ratings"]
+        else:
+            return ["Compare carrier quotes", "Find best coverage match", "Check premium trends"]
+    elif agent_type == "crosssell":
+        if "opportunity" in msg_lower or "gap" in msg_lower:
+            return ["Generate coverage proposal", "Estimate premium for gap", "Show similar client bundles"]
+        elif "recommend" in msg_lower:
+            return ["Show coverage gaps", "Compare bundled pricing", "Review client risk profile"]
+        else:
+            return ["Find coverage gaps", "Suggest new product lines", "Identify upsell opportunities"]
+    else:
+        if "renewal" in msg_lower:
+            return ["Show renewal timeline", "Prioritize by premium size", "Flag at-risk renewals"]
+        elif "policy" in msg_lower or "policies" in msg_lower:
+            return ["Filter by policy type", "Show high-value policies", "Check renewal dates"]
+        elif "client" in msg_lower:
+            return ["View client portfolio", "Check coverage adequacy", "Show renewal calendar"]
+        else:
+            return ["Analyze my book of business", "Show upcoming renewals", "Find cross-sell opportunities"]
+
+
 async def _stream_agent(request: ChatRequest):
     """Async generator yielding SSE events for a streaming agent response."""
     from agents.quote_agent import QuoteComparisonAgent
@@ -88,6 +124,8 @@ async def _stream_agent(request: ChatRequest):
         message = f"[Context: Working with client ID {request.client_id}] {request.message}"
 
     try:
+        resolved_agent = request.agent.value
+
         # ── Triage routing ──────────────────────────────────────────────
         if request.agent == AgentType.TRIAGE:
             triage = TriageAgent()
@@ -103,10 +141,12 @@ async def _stream_agent(request: ChatRequest):
 
             if intent in specialists:
                 agent = specialists[intent]()
+                resolved_agent = intent
                 yield f"data: {json.dumps({'type': 'status', 'content': f'Routing to {agent.name}…'})}\n\n"
             else:
                 # general — triage agent answers directly
                 agent = triage
+                resolved_agent = "triage"
         elif request.agent == AgentType.QUOTE:
             agent = QuoteComparisonAgent()
         elif request.agent == AgentType.CROSSSELL:
@@ -183,12 +223,15 @@ async def _stream_agent(request: ChatRequest):
             temperature=config.temperature,
         )
 
+        full_response = ""
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
+                full_response += chunk.choices[0].delta.content
                 yield f"data: {json.dumps({'type': 'token', 'content': chunk.choices[0].delta.content})}\n\n"
                 await asyncio.sleep(0.03)  # Smooth typewriter effect for demos
 
-        yield f"data: {json.dumps({'type': 'done', 'agent': agent.name})}\n\n"
+        suggestions = _get_contextual_suggestions(resolved_agent, message, full_response)
+        yield f"data: {json.dumps({'type': 'done', 'agent': agent.name, 'suggestions': suggestions})}\n\n"
 
     except Exception as e:
         logger.error("Streaming agent error: %s", e)

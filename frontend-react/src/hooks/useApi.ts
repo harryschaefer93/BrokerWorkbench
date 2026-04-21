@@ -178,7 +178,7 @@ export function useChat() {
             const raw = line.slice(6).trim();
             if (!raw) continue;
 
-            let event: { type: string; content?: string; agent?: string };
+            let event: { type: string; content?: string; agent?: string; suggestions?: string[] };
             try {
               event = JSON.parse(raw);
             } catch {
@@ -208,6 +208,9 @@ export function useChat() {
               const resolvedAgent = event.agent
                 ? agentNameMap[event.agent] ?? agentType
                 : agentType;
+              const suggestions = (event as { suggestions?: string[] }).suggestions?.length
+                ? (event as { suggestions?: string[] }).suggestions!
+                : extractSuggestions(finalContent, resolvedAgent as ChatMessage["agentType"]);
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
@@ -215,7 +218,7 @@ export function useChat() {
                         ...m,
                         content: finalContent,
                         agentType: resolvedAgent as ChatMessage["agentType"],
-                        suggestions: extractSuggestions(finalContent),
+                        suggestions,
                       }
                     : m,
                 ),
@@ -260,7 +263,7 @@ export function useChat() {
 }
 
 // Helper to extract actionable suggestions from response
-function extractSuggestions(text: string): string[] {
+function extractSuggestions(text: string, agentType?: string): string[] {
   const suggestions: string[] = [];
 
   // Look for "Next Steps" or "Recommendations" sections
@@ -292,29 +295,16 @@ function extractSuggestions(text: string): string[] {
     }
   }
 
-  // If no next steps found, generate contextual suggestions based on content
+  // If no next steps found, generate contextual suggestions based on agent type
   if (suggestions.length === 0) {
-    if (
-      text.toLowerCase().includes("quote") ||
-      text.toLowerCase().includes("premium")
-    ) {
-      suggestions.push("Compare all carriers");
-      suggestions.push("Request formal quote");
-    }
-    if (text.toLowerCase().includes("renewal")) {
-      suggestions.push("View renewal timeline");
-    }
-    if (
-      text.toLowerCase().includes("claim") ||
-      text.toLowerCase().includes("coverage")
-    ) {
-      suggestions.push("Review coverage details");
-    }
-    if (
-      text.toLowerCase().includes("cross-sell") ||
-      text.toLowerCase().includes("opportunity")
-    ) {
-      suggestions.push("Show all opportunities");
+    if (agentType === "claims") {
+      suggestions.push("Show claims history", "Analyze impact on premiums", "Identify loss trends");
+    } else if (agentType === "quote") {
+      suggestions.push("Compare carrier quotes", "Find best coverage match", "Check premium trends");
+    } else if (agentType === "crosssell") {
+      suggestions.push("Find coverage gaps", "Suggest new product lines", "Identify upsell opportunities");
+    } else {
+      suggestions.push("Analyze my book of business", "Show upcoming renewals", "Find cross-sell opportunities");
     }
   }
 

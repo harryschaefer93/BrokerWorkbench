@@ -30,6 +30,7 @@ CARRIERS: Dict[str, dict] = {
             PolicyType.COMMERCIAL_AUTO
         ],
         "api_enabled": True,
+        "api_status": "active",
         "average_quote_time_hours": 2.5,
         "notes": "Strong in middle market",
         "created_at": _now(),
@@ -46,6 +47,7 @@ CARRIERS: Dict[str, dict] = {
             PolicyType.PROFESSIONAL_LIABILITY
         ],
         "api_enabled": True,
+        "api_status": "active",
         "average_quote_time_hours": 3.0,
         "notes": "Excellent small business programs",
         "created_at": _now(),
@@ -62,6 +64,7 @@ CARRIERS: Dict[str, dict] = {
             PolicyType.UMBRELLA
         ],
         "api_enabled": True,
+        "api_status": "active",
         "average_quote_time_hours": 1.5,
         "notes": "Fast API integration, competitive rates",
         "created_at": _now(),
@@ -77,6 +80,7 @@ CARRIERS: Dict[str, dict] = {
             PolicyType.GENERAL_LIABILITY
         ],
         "api_enabled": False,
+        "api_status": "inactive",
         "average_quote_time_hours": 24.0,
         "notes": "Specialty lines focus, manual quoting",
         "created_at": _now(),
@@ -93,6 +97,7 @@ CARRIERS: Dict[str, dict] = {
             PolicyType.UMBRELLA
         ],
         "api_enabled": True,
+        "api_status": "active",
         "average_quote_time_hours": 4.0,
         "notes": "Premium carrier, high limits available",
         "created_at": _now(),
@@ -110,6 +115,7 @@ CARRIERS: Dict[str, dict] = {
             PolicyType.UMBRELLA
         ],
         "api_enabled": True,
+        "api_status": "active",
         "average_quote_time_hours": 2.0,
         "notes": "Strong risk engineering services",
         "created_at": _now(),
@@ -125,6 +131,7 @@ CARRIERS: Dict[str, dict] = {
             PolicyType.GENERAL_LIABILITY
         ],
         "api_enabled": False,
+        "api_status": "inactive",
         "average_quote_time_hours": 48.0,
         "notes": "Selective underwriting, large accounts",
         "created_at": _now(),
@@ -138,6 +145,7 @@ CARRIERS: Dict[str, dict] = {
             PolicyType.CYBER_LIABILITY
         ],
         "api_enabled": True,
+        "api_status": "active",
         "average_quote_time_hours": 0.5,
         "notes": "Cyber specialist, instant quotes",
         "created_at": _now(),

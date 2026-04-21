@@ -87,6 +87,7 @@ class CarrierBase(BaseModel):
     am_best_rating: CarrierRating
     supported_lines: List[PolicyType]
     api_enabled: bool = False
+    api_status: str = "inactive"
     average_quote_time_hours: Optional[float] = None
     notes: Optional[str] = None
 

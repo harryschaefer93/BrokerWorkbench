@@ -234,20 +234,6 @@ export function Sidebar() {
           </CardContent>
         </Card>
       </div>
-
-      {/* Foundry Branding */}
-      <div className="p-4 border-t">
-        <a href="https://ai.azure.com" target="_blank" rel="noopener noreferrer"
-           className="flex items-center gap-2 text-xs text-muted-foreground hover:text-violet-500 transition-colors group">
-          <svg className="h-4 w-4 text-violet-500 group-hover:text-violet-600 transition-colors" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-            <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="currentColor"/>
-          </svg>
-          <div>
-            <div className="font-medium text-foreground/80">Microsoft Foundry</div>
-            <div className="text-[10px] opacity-70">AI agents & intelligence</div>
-          </div>
-        </a>
-      </div>
     </aside>
   );
 }
