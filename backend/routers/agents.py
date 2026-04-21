@@ -75,40 +75,106 @@ async def agent_chat_stream(request: ChatRequest):
 
 
 def _get_contextual_suggestions(agent_type: str, message: str, response_text: str) -> list[str]:
-    """Return contextual follow-up suggestions based on agent type and conversation."""
+    """Return follow-up suggestions that ADVANCE the conversation.
+    
+    Rules:
+    - Never suggest what was just done (e.g., don't suggest 'Show claims history' after showing it)
+    - Suggest the logical NEXT step a broker would take
+    - Cross-agent suggestions are good (claims → quote, quote → crosssell)
+    - Include client ID in suggestions when we can extract it from context
+    """
     msg_lower = message.lower()
+    resp_lower = response_text.lower()
+    
+    # Try to extract client ID from message or response for contextual pills
+    import re
+    client_match = re.search(r'(CLI\d{3})', message, re.IGNORECASE) or re.search(r'(CLI\d{3})', response_text, re.IGNORECASE)
+    client_id = client_match.group(1).upper() if client_match else None
+    
+    def _with_client(suggestion: str) -> str:
+        """Append client ID to suggestion if known."""
+        if client_id:
+            return f"{suggestion} for {client_id}"
+        return suggestion
     
     if agent_type == "claims":
-        if "impact" in msg_lower or "analysis" in msg_lower or "ratio" in msg_lower:
-            suggestions = ["Show full claims history", "Check renewal urgency", "View policy details"]
-        elif "history" in msg_lower or "filed" in msg_lower:
-            suggestions = ["Analyze claims impact on renewal", "Show client policies", "Check renewal urgency"]
+        if "impact" in msg_lower or "premium" in msg_lower:
+            # Just showed premium impact → suggest deeper analysis or next actions
+            suggestions = [
+                _with_client("Show loss ratio trend"),
+                _with_client("Get renewal quotes"),
+                _with_client("Find coverage gaps"),
+            ]
+        elif "trend" in msg_lower or "ratio" in msg_lower:
+            # Just showed trend → suggest actionable next steps
+            suggestions = [
+                _with_client("Get renewal quotes"),
+                _with_client("Analyze claims impact"),
+                _with_client("Check renewal urgency"),
+            ]
+        elif "history" in msg_lower:
+            # Just showed history → suggest analysis or quotes
+            suggestions = [
+                _with_client("Analyze claims impact"),
+                _with_client("Show loss ratio trend"),
+                _with_client("Get renewal quotes"),
+            ]
+        elif "renewal" in msg_lower:
+            suggestions = [
+                _with_client("Analyze claims impact"),
+                _with_client("Get renewal quotes"),
+                _with_client("Find coverage gaps"),
+            ]
         else:
-            suggestions = ["Show claims history", "Analyze claims impact on renewal", "Check renewal urgency"]
+            suggestions = [
+                _with_client("Analyze claims impact"),
+                _with_client("Show loss ratio trend"),
+                _with_client("Check renewal urgency"),
+            ]
     elif agent_type == "quote":
-        if "compare" in msg_lower or "carrier" in msg_lower:
-            suggestions = ["Request competing quotes", "View carrier details", "Check policy coverage"]
-        elif "request" in msg_lower or "formal" in msg_lower:
-            suggestions = ["Compare across all carriers", "View policy details", "Check renewal timeline"]
+        if "compare" in msg_lower or "quote" in msg_lower:
+            # Just compared quotes → suggest next steps
+            suggestions = [
+                _with_client("Find coverage gaps"),
+                _with_client("Analyze claims impact"),
+                _with_client("Check renewal urgency"),
+            ]
         else:
-            suggestions = ["Get competing quotes", "Compare carrier options", "View current policy"]
+            suggestions = [
+                _with_client("Compare carrier quotes"),
+                _with_client("Find coverage gaps"),
+                _with_client("Check renewal urgency"),
+            ]
     elif agent_type == "crosssell":
-        if "opportunity" in msg_lower or "gap" in msg_lower:
-            suggestions = ["Show client's current policies", "Get competing quotes for gap", "View carrier options"]
-        elif "recommend" in msg_lower:
-            suggestions = ["Find coverage gaps", "Show client portfolio", "Get quotes for recommendation"]
+        if "gap" in msg_lower or "opportunity" in msg_lower or "cross" in msg_lower:
+            # Just showed gaps → suggest getting quotes for them
+            suggestions = [
+                _with_client("Get quotes for coverage gap"),
+                _with_client("Analyze claims impact"),
+                _with_client("Check renewal urgency"),
+            ]
         else:
-            suggestions = ["Find cross-sell opportunities", "Show client policies", "Identify coverage gaps"]
+            suggestions = [
+                _with_client("Find cross-sell opportunities"),
+                _with_client("Compare carrier quotes"),
+                _with_client("Check renewal urgency"),
+            ]
     else:
         # triage/general
         if "renewal" in msg_lower:
-            suggestions = ["Show renewals by urgency", "View policy details", "Analyze claims impact"]
+            suggestions = [
+                _with_client("Analyze claims impact"),
+                _with_client("Get renewal quotes"),
+                _with_client("Find coverage gaps"),
+            ]
         elif "policy" in msg_lower or "policies" in msg_lower:
-            suggestions = ["Check renewal dates", "Show claims history", "Find cross-sell opportunities"]
-        elif "client" in msg_lower:
-            suggestions = ["View client policies", "Check renewal urgency", "Find coverage opportunities"]
+            suggestions = [
+                _with_client("Check renewal urgency"),
+                _with_client("Analyze claims impact"),
+                _with_client("Find cross-sell opportunities"),
+            ]
         else:
-            suggestions = ["Show upcoming renewals", "Analyze a client's book", "Find cross-sell opportunities"]
+            suggestions = ["Show upcoming renewals", "Analyze a client's claims", "Find cross-sell opportunities"]
     
     return suggestions
 
