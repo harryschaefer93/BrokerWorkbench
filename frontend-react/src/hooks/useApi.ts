@@ -136,13 +136,13 @@ export function useChat() {
       setStatusMessage(null);
 
       // Add a placeholder assistant message that we will update in place
+      // Don't set agentType yet — triage will resolve it via a 'routing' event
       const assistantId = (Date.now() + 1).toString();
       const placeholder: ChatMessage = {
         id: assistantId,
         role: "assistant",
         content: "",
         timestamp: new Date(),
-        agentType,
       };
       setMessages((prev) => [...prev, placeholder]);
 
@@ -186,7 +186,26 @@ export function useChat() {
               continue; // skip malformed event
             }
 
-            if (event.type === "status") {
+            if (event.type === "routing") {
+              // Triage resolved to a specialist — update agent avatar immediately
+              const agentNameMap: Record<string, string> = {
+                ClaimsImpactAgent: "claims",
+                CrossSellAgent: "crosssell",
+                QuoteComparisonAgent: "quote",
+                BrokerAgent: "triage",
+              };
+              const routedAgent = event.agent
+                ? agentNameMap[event.agent] ?? agentType
+                : agentType;
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, agentType: routedAgent as ChatMessage["agentType"] }
+                    : m,
+                ),
+              );
+              setStatusMessage(event.content ?? null);
+            } else if (event.type === "status") {
               setStatusMessage(event.content ?? null);
             } else if (event.type === "token") {
               fullContent += event.content ?? "";

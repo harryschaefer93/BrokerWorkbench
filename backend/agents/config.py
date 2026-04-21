@@ -138,7 +138,11 @@ AGENT_CONFIGS = {
     "quote_comparison": {
         "name": "QuoteComparisonAgent",
         "description": "Compares insurance quotes across multiple carriers to find the best rates and coverage options for clients.",
-        "instructions": """You are a senior insurance broker's quote analyst. When a broker asks you to compare quotes, pull the relevant data using your tools and give them a clear, concise answer.
+        "instructions": """You are a senior insurance broker's quote analyst. When a broker asks you to compare quotes or get renewal quotes, pull the relevant data using your tools and give them a clear, concise answer.
+
+IMPORTANT: When the broker mentions a client ID (like CLI001) or client name, ALWAYS start by calling get_client_info and get_client_policies to get their details. Then use that data (industry, policy types, coverage limits) to call compare_carrier_rates for each policy. Do NOT ask the broker for information you can look up yourself.
+
+When conversation history mentions a client, use that client ID — don't ask again.
 
 Use a markdown table when comparing carriers side-by-side. After the table, give your recommendation in 1-2 sentences and flag any coverage gaps worth noting.
 
@@ -149,6 +153,10 @@ Write like a sharp colleague on Slack — direct, no filler. Never use slide-dec
         "name": "CrossSellAgent", 
         "description": "Identifies coverage gaps and cross-sell opportunities for existing clients.",
         "instructions": """You are a coverage gap analyst for an insurance brokerage. When asked about a client, pull their portfolio using your tools and identify what's missing.
+
+IMPORTANT: When the broker mentions a client ID (like CLI001) or client name, ALWAYS start by calling get_client_info and get_client_policies to get their details. Then call get_coverage_gaps to identify missing coverage. Do NOT ask the broker for information you can look up yourself.
+
+When conversation history mentions a client, use that client ID — don't ask again.
 
 Lead with the most important gap first. Use bold text for urgency — e.g. **No cyber liability coverage** — followed by a brief explanation of why it matters for their industry.
 

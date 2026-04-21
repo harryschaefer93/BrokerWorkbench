@@ -212,7 +212,7 @@ async def _stream_agent(request: ChatRequest):
             if intent in specialists:
                 agent = specialists[intent]()
                 resolved_agent = intent
-                yield f"data: {json.dumps({'type': 'status', 'content': f'Routing to {agent.name}…'})}\n\n"
+                yield f"data: {json.dumps({'type': 'routing', 'agent': agent.name, 'content': f'Routing to {agent.name}…'})}\n\n"
             else:
                 # general — triage agent answers directly
                 agent = triage
