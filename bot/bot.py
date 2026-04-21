@@ -49,6 +49,15 @@ class BrokerBot(TeamsActivityHandler):
         if not text:
             return
 
+        # Reset/clear command
+        if text.lower().strip() in ("clear", "/reset", "new conversation", "/clear", "reset"):
+            conv_id = turn_context.activity.conversation.id
+            self._history.pop(conv_id, None)
+            card_payload = self.formatter.format_reset_card()
+            attachment = self._make_attachment(card_payload)
+            await turn_context.send_activity(MessageFactory.attachment(attachment))
+            return
+
         conv_id = turn_context.activity.conversation.id
         history = self._history[conv_id]
 

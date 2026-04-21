@@ -67,6 +67,14 @@ class CardFormatter:
         if suggestions:
             actions = self._build_suggestions(suggestions)
 
+        # Always add a reset button at the end
+        actions.append({
+            "type": "Action.Submit",
+            "title": "\U0001f504 New Conversation",
+            "data": {"message": "/reset"},
+            "style": "default",
+        })
+
         return self._wrap_card(body, actions)
 
     def format_welcome_card(self) -> dict:
@@ -174,6 +182,40 @@ class CardFormatter:
                 "data": {"message": "Show upcoming renewals"},
                 "style": "positive",
             }
+        ]
+        return self._wrap_card(body, actions)
+
+    def format_reset_card(self) -> dict:
+        """Card confirming conversation has been cleared."""
+        body: list[dict] = [
+            {
+                "type": "TextBlock",
+                "text": "\u2705 Conversation cleared",
+                "weight": "Bolder",
+                "size": "Medium",
+            },
+            {
+                "type": "TextBlock",
+                "text": "Your conversation history has been reset. What would you like to explore?",
+                "wrap": True,
+                "isSubtle": True,
+                "spacing": "Small",
+            },
+        ]
+        prompts = [
+            "Show upcoming renewals",
+            "Analyze claims impact for CLI001",
+            "Compare carrier quotes for commercial property",
+            "Find cross-sell opportunities for CLI003",
+        ]
+        actions = [
+            {
+                "type": "Action.Submit",
+                "title": p,
+                "data": {"message": p},
+                "style": "positive" if i == 0 else "default",
+            }
+            for i, p in enumerate(prompts)
         ]
         return self._wrap_card(body, actions)
 
@@ -355,6 +397,10 @@ class CardFormatter:
         # Skip separator row (index 1)
         data_rows = [_split_row(l) for l in table_lines[2:]]
 
+        # Wide tables (>5 columns) render poorly in Teams — use vertical FactSet layout
+        if len(headers) > 5:
+            return self._parse_table_as_facts(headers, data_rows)
+
         columns_def = [
             {"width": 1} for _ in headers
         ]
@@ -411,6 +457,50 @@ class CardFormatter:
             "columns": columns_def,
             "rows": rows,
             "spacing": "Medium",
+        }
+
+    def _parse_table_as_facts(
+        self, headers: list[str], data_rows: list[list[str]]
+    ) -> dict:
+        """Render a wide table as vertical FactSet cards (one per row)."""
+        max_rows = 8
+        truncated = len(data_rows) > max_rows
+        visible_rows = data_rows[:max_rows]
+
+        items: list[dict] = []
+        for idx, row_data in enumerate(visible_rows):
+            # Pad short rows
+            while len(row_data) < len(headers):
+                row_data.append("")
+            facts = [
+                {"title": h, "value": self._inline_format(row_data[i])}
+                for i, h in enumerate(headers)
+            ]
+            items.append(
+                {
+                    "type": "FactSet",
+                    "separator": idx != 0,
+                    "facts": facts,
+                }
+            )
+
+        if truncated:
+            remaining = len(data_rows) - max_rows
+            items.append(
+                {
+                    "type": "TextBlock",
+                    "text": f"\u2026and {remaining} more",
+                    "isSubtle": True,
+                    "spacing": "Small",
+                    "wrap": True,
+                }
+            )
+
+        return {
+            "type": "Container",
+            "style": "default",
+            "spacing": "Medium",
+            "items": items,
         }
 
     # ------------------------------------------------------------------
