@@ -537,8 +537,15 @@ export function AIChatPanel({
   const handleSend = () => {
     if (!inputValue.trim() || isLoading) return;
 
+    // Build conversation history from recent messages (last 10 user/assistant turns)
+    const history = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .filter((m) => m.content && m.content.trim().length > 0)
+      .slice(-10)
+      .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
+
     // Always route through triage agent for LLM-based classification
-    sendMessage(inputValue, "triage");
+    sendMessage(inputValue, "triage", history);
     setInputValue("");
   };
 

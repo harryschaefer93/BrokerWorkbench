@@ -26,6 +26,7 @@ class ClaimsImpactAgent:
             "get_client_info",
             "get_client_policies",
             "get_claims_history",
+            "get_loss_ratio_trend",
             "get_carriers_for_policy_type",
             "get_renewals_by_urgency",
             "get_policy_details",

@@ -627,6 +627,87 @@ def _get_loss_control_recommendations(industry: str, loss_ratio: float) -> List[
     return recs
 
 
+def get_loss_ratio_trend(client_id: str) -> Dict[str, Any]:
+    """
+    Get year-over-year loss ratio trend for a client's policies.
+    
+    Args:
+        client_id: The unique identifier for the client (e.g., "CLI001")
+    
+    Returns:
+        Dictionary with yearly loss ratio trend data and direction analysis
+    """
+    if client_id not in CLIENTS:
+        return {"error": f"Client {client_id} not found"}
+    
+    client = CLIENTS[client_id]
+    policies = [p for p in POLICIES.values() if p["client_id"] == client_id]
+    if not policies:
+        return {"error": f"No policies found for {client_id}"}
+    
+    total_premium = sum(p["premium"] for p in policies)
+    
+    # Simulated claims data using same approach as get_claims_history
+    industry_claim_rates = {
+        "Technology": {"frequency": 0.1, "severity": 15000},
+        "Healthcare": {"frequency": 0.25, "severity": 75000},
+        "Manufacturing": {"frequency": 0.2, "severity": 25000},
+        "Construction": {"frequency": 0.35, "severity": 45000},
+        "Transportation": {"frequency": 0.3, "severity": 35000},
+    }
+    rates = industry_claim_rates.get(
+        client["industry"],
+        {"frequency": 0.15, "severity": 20000}
+    )
+    
+    import random
+    random.seed(hash(client_id + "_trend"))
+    
+    current_year = date.today().year
+    trend_data = []
+    
+    for year in range(current_year - 3, current_year):
+        num_claims = int(random.gauss(rates["frequency"] * len(policies), 0.5))
+        num_claims = max(0, num_claims)
+        
+        total_incurred = sum(
+            random.gauss(rates["severity"], rates["severity"] * 0.3)
+            for _ in range(num_claims)
+        ) if num_claims > 0 else 0
+        total_incurred = round(max(0, total_incurred), 2)
+        
+        loss_ratio_pct = round((total_incurred / total_premium * 100), 1) if total_premium > 0 else 0
+        
+        trend_data.append({
+            "year": year,
+            "claims_count": num_claims,
+            "total_incurred": total_incurred,
+            "total_premium": total_premium,
+            "loss_ratio_pct": loss_ratio_pct,
+        })
+    
+    # Calculate trend direction
+    if len(trend_data) >= 2:
+        first_ratio = trend_data[0]["loss_ratio_pct"]
+        last_ratio = trend_data[-1]["loss_ratio_pct"]
+        if last_ratio < first_ratio:
+            trend_direction = "improving"
+        elif last_ratio > first_ratio:
+            trend_direction = "worsening"
+        else:
+            trend_direction = "stable"
+    else:
+        trend_direction = "insufficient_data"
+    
+    return {
+        "client_id": client_id,
+        "client_name": client["name"],
+        "trend_direction": trend_direction,
+        "yearly_data": trend_data,
+        "analysis": f"Loss ratio trend for {client['name']} over 3 years",
+    }
+
+
 # =============================================================================
 # Function Tool Definitions for Azure AI Foundry
 # =============================================================================
@@ -797,6 +878,21 @@ TOOL_DEFINITIONS = [
             "required": ["client_id"],
             "additionalProperties": False
         }
+    },
+    {
+        "name": "get_loss_ratio_trend",
+        "description": "Get year-over-year loss ratio trend for a client's policies, showing claims count, incurred amounts, and loss ratio percentage for each of the last 3 years with an overall trend direction.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "client_id": {
+                    "type": "string",
+                    "description": "The unique identifier for the client (e.g., 'CLI001')"
+                }
+            },
+            "required": ["client_id"],
+            "additionalProperties": False
+        }
     }
 ]
 
@@ -812,6 +908,7 @@ TOOL_FUNCTIONS = {
     "compare_carrier_rates": compare_carrier_rates,
     "get_coverage_gaps": get_coverage_gaps,
     "get_claims_history": get_claims_history,
+    "get_loss_ratio_trend": get_loss_ratio_trend,
 }
 
 

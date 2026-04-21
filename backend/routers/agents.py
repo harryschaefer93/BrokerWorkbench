@@ -39,6 +39,7 @@ class ChatRequest(BaseModel):
     agent: AgentType = Field(..., description="Which agent to use")
     client_id: Optional[str] = Field(None, description="Optional client ID for context")
     conversation_id: Optional[str] = Field(None, description="Continue existing conversation")
+    history: Optional[list[dict]] = Field(None, description="Conversation history for context")
 
 
 class ChatResponse(BaseModel):
@@ -76,37 +77,40 @@ async def agent_chat_stream(request: ChatRequest):
 def _get_contextual_suggestions(agent_type: str, message: str, response_text: str) -> list[str]:
     """Return contextual follow-up suggestions based on agent type and conversation."""
     msg_lower = message.lower()
-
+    
     if agent_type == "claims":
-        if "impact" in msg_lower or "analysis" in msg_lower:
-            return ["Show loss ratio trend", "Compare to industry benchmark", "View claim details"]
+        if "impact" in msg_lower or "analysis" in msg_lower or "ratio" in msg_lower:
+            suggestions = ["Show full claims history", "Check renewal urgency", "View policy details"]
         elif "history" in msg_lower or "filed" in msg_lower:
-            return ["Analyze claims impact on renewal", "Show claims by severity", "Flag high-risk policies"]
+            suggestions = ["Analyze claims impact on renewal", "Show client policies", "Check renewal urgency"]
         else:
-            return ["Show claims history", "Analyze impact on premiums", "Identify loss trends"]
+            suggestions = ["Show claims history", "Analyze claims impact on renewal", "Check renewal urgency"]
     elif agent_type == "quote":
         if "compare" in msg_lower or "carrier" in msg_lower:
-            return ["Request formal quotes", "Show coverage comparison", "Rank by price"]
+            suggestions = ["Request competing quotes", "View carrier details", "Check policy coverage"]
         elif "request" in msg_lower or "formal" in msg_lower:
-            return ["Compare across carriers", "Review terms and conditions", "Check carrier ratings"]
+            suggestions = ["Compare across all carriers", "View policy details", "Check renewal timeline"]
         else:
-            return ["Compare carrier quotes", "Find best coverage match", "Check premium trends"]
+            suggestions = ["Get competing quotes", "Compare carrier options", "View current policy"]
     elif agent_type == "crosssell":
         if "opportunity" in msg_lower or "gap" in msg_lower:
-            return ["Generate coverage proposal", "Estimate premium for gap", "Show similar client bundles"]
+            suggestions = ["Show client's current policies", "Get competing quotes for gap", "View carrier options"]
         elif "recommend" in msg_lower:
-            return ["Show coverage gaps", "Compare bundled pricing", "Review client risk profile"]
+            suggestions = ["Find coverage gaps", "Show client portfolio", "Get quotes for recommendation"]
         else:
-            return ["Find coverage gaps", "Suggest new product lines", "Identify upsell opportunities"]
+            suggestions = ["Find cross-sell opportunities", "Show client policies", "Identify coverage gaps"]
     else:
+        # triage/general
         if "renewal" in msg_lower:
-            return ["Show renewal timeline", "Prioritize by premium size", "Flag at-risk renewals"]
+            suggestions = ["Show renewals by urgency", "View policy details", "Analyze claims impact"]
         elif "policy" in msg_lower or "policies" in msg_lower:
-            return ["Filter by policy type", "Show high-value policies", "Check renewal dates"]
+            suggestions = ["Check renewal dates", "Show claims history", "Find cross-sell opportunities"]
         elif "client" in msg_lower:
-            return ["View client portfolio", "Check coverage adequacy", "Show renewal calendar"]
+            suggestions = ["View client policies", "Check renewal urgency", "Find coverage opportunities"]
         else:
-            return ["Analyze my book of business", "Show upcoming renewals", "Find cross-sell opportunities"]
+            suggestions = ["Show upcoming renewals", "Analyze a client's book", "Find cross-sell opportunities"]
+    
+    return suggestions
 
 
 async def _stream_agent(request: ChatRequest):
@@ -167,10 +171,14 @@ async def _stream_agent(request: ChatRequest):
             api_version=config.api_version,
         )
 
-        messages = [
-            {"role": "system", "content": agent.instructions},
-            {"role": "user", "content": message},
-        ]
+        messages = [{"role": "system", "content": agent.instructions}]
+        # Include conversation history for multi-turn context
+        history = request.history
+        if history:
+            for h in history[-10:]:
+                if h.get("role") in ("user", "assistant") and h.get("content"):
+                    messages.append({"role": h["role"], "content": h["content"]})
+        messages.append({"role": "user", "content": message})
         tools = agent.get_tool_definitions()
 
         # ── Tool-calling phase (non-streamed; emit status events per call) ──

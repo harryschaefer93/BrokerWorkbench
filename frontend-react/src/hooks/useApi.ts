@@ -121,6 +121,7 @@ export function useChat() {
     async (
       content: string,
       agentType: "claims" | "crosssell" | "quote" | "triage" = "triage",
+      history?: { role: "user" | "assistant"; content: string }[],
     ) => {
       const userMessage: ChatMessage = {
         id: Date.now().toString(),
@@ -149,7 +150,7 @@ export function useChat() {
         const response = await fetch(`${API_BASE}/agent/chat/stream`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ message: content, agent: agentType }),
+          body: JSON.stringify({ message: content, agent: agentType, history: history || [] }),
         });
 
         if (!response.ok || !response.body) {
