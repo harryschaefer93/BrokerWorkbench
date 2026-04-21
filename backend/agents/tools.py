@@ -192,10 +192,16 @@ def get_renewals_by_urgency(urgency: Optional[str] = None, days_ahead: int = 90)
     Returns:
         Dictionary with renewal summary and list of policies
     """
+    # Coerce days_ahead to int in case model passes a string
+    try:
+        days_ahead = int(days_ahead)
+    except (TypeError, ValueError):
+        days_ahead = 90
+
     urgency_filter = None
-    if urgency:
+    if urgency and str(urgency).lower() not in ('none', 'null', ''):
         try:
-            urgency_filter = RenewalUrgency(urgency.lower())
+            urgency_filter = RenewalUrgency(str(urgency).lower())
         except ValueError:
             return {"error": f"Invalid urgency level: {urgency}. Use critical, high, medium, or low."}
     
@@ -219,7 +225,7 @@ def get_renewals_by_urgency(urgency: Optional[str] = None, days_ahead: int = 90)
         })
     
     return {
-        "total_renewals": summary.total_count,
+        "total_renewals": summary.total_renewals,
         "critical_count": summary.critical_count,
         "high_count": summary.high_count,
         "medium_count": summary.medium_count,

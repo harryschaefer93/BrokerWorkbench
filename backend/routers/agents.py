@@ -6,6 +6,7 @@ Provides REST endpoints for interacting with AI agents:
 - Cross-Sell Agent
 - Claims Impact Agent
 """
+import asyncio
 import json
 import logging
 import os
@@ -29,6 +30,7 @@ class AgentType(str, Enum):
     QUOTE = "quote"
     CROSSSELL = "crosssell"
     CLAIMS = "claims"
+    TRIAGE = "triage"
 
 
 class ChatRequest(BaseModel):
@@ -76,6 +78,7 @@ async def _stream_agent(request: ChatRequest):
     from agents.quote_agent import QuoteComparisonAgent
     from agents.crosssell_agent import CrossSellAgent
     from agents.claims_agent import ClaimsImpactAgent
+    from agents.triage_agent import TriageAgent
     from openai import AsyncAzureOpenAI
     from azure.identity import get_bearer_token_provider
     from agents.config import get_credential
@@ -85,7 +88,26 @@ async def _stream_agent(request: ChatRequest):
         message = f"[Context: Working with client ID {request.client_id}] {request.message}"
 
     try:
-        if request.agent == AgentType.QUOTE:
+        # ── Triage routing ──────────────────────────────────────────────
+        if request.agent == AgentType.TRIAGE:
+            triage = TriageAgent()
+            classification = await triage.classify(message)
+            intent = classification["intent"]
+            logger.info("Triage routed to: %s (confidence=%s)", intent, classification.get("confidence"))
+
+            specialists = {
+                "claims": ClaimsImpactAgent,
+                "crosssell": CrossSellAgent,
+                "quote": QuoteComparisonAgent,
+            }
+
+            if intent in specialists:
+                agent = specialists[intent]()
+                yield f"data: {json.dumps({'type': 'status', 'content': f'Routing to {agent.name}…'})}\n\n"
+            else:
+                # general — triage agent answers directly
+                agent = triage
+        elif request.agent == AgentType.QUOTE:
             agent = QuoteComparisonAgent()
         elif request.agent == AgentType.CROSSSELL:
             agent = CrossSellAgent()
@@ -112,7 +134,10 @@ async def _stream_agent(request: ChatRequest):
         tools = agent.get_tool_definitions()
 
         # ── Tool-calling phase (non-streamed; emit status events per call) ──
-        while True:
+        max_tool_rounds = 3
+        tool_round = 0
+        while tool_round < max_tool_rounds:
+            tool_round += 1
             response = await client.chat.completions.create(
                 model=config.model_deployment,
                 messages=messages,
@@ -144,7 +169,9 @@ async def _stream_agent(request: ChatRequest):
                 yield f"data: {json.dumps({'type': 'status', 'content': f'Looking up {readable}…'})}\n\n"
                 import json as _json
                 func_args = _json.loads(tc.function.arguments)
+                logger.info("Tool call: %s(%s)", tc.function.name, func_args)
                 result = agent.handle_tool_call(tc.function.name, func_args)
+                logger.info("Tool result (first 200 chars): %s", result[:200])
                 messages.append({"role": "tool", "tool_call_id": tc.id, "content": result})
 
         # ── Streaming response phase ──
@@ -159,6 +186,7 @@ async def _stream_agent(request: ChatRequest):
         async for chunk in stream:
             if chunk.choices and chunk.choices[0].delta.content:
                 yield f"data: {json.dumps({'type': 'token', 'content': chunk.choices[0].delta.content})}\n\n"
+                await asyncio.sleep(0.03)  # Smooth typewriter effect for demos
 
         yield f"data: {json.dumps({'type': 'done', 'agent': agent.name})}\n\n"
 
@@ -211,6 +239,7 @@ async def _run_agent(request: ChatRequest) -> ChatResponse:
     from agents.quote_agent import QuoteComparisonAgent
     from agents.crosssell_agent import CrossSellAgent
     from agents.claims_agent import ClaimsImpactAgent
+    from agents.triage_agent import TriageAgent
     
     # Build message with context if client_id provided
     message = request.message
@@ -219,7 +248,15 @@ async def _run_agent(request: ChatRequest) -> ChatResponse:
     
     # Select and run agent
     try:
-        if request.agent == AgentType.QUOTE:
+        if request.agent == AgentType.TRIAGE:
+            agent = TriageAgent()
+            result = await agent.run(message, conversation_id=request.conversation_id)
+            return ChatResponse(
+                response=result.get("response", ""),
+                agent=result.get("agent", "BrokerAgent"),
+                conversation_id=result.get("conversation_id"),
+            )
+        elif request.agent == AgentType.QUOTE:
             agent = QuoteComparisonAgent()
         elif request.agent == AgentType.CROSSSELL:
             agent = CrossSellAgent()

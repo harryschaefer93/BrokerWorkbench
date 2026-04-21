@@ -229,11 +229,11 @@ const markdownComponents: Components = {
     if (kvMatch) {
       const [, key, value] = kvMatch;
       return (
-        <li className="flex items-start gap-2 py-1 border-b border-dashed border-slate-200 dark:border-slate-700 last:border-0">
-          <span className="text-slate-500 dark:text-slate-400 font-medium min-w-[120px] text-xs uppercase tracking-wide">
+        <li className="py-0.5">
+          <span className="font-medium text-slate-700 dark:text-slate-300">
             {key}:
-          </span>
-          <span className="text-slate-800 dark:text-slate-200 font-medium">
+          </span>{" "}
+          <span className="text-slate-600 dark:text-slate-400">
             {formatTextContent(value)}
           </span>
         </li>
@@ -249,7 +249,7 @@ const markdownComponents: Components = {
 
   // Styled unordered lists
   ul: ({ children }) => (
-    <ul className="my-3 space-y-0 bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-700 p-3 shadow-sm">
+    <ul className="my-2 ml-4 space-y-1 list-disc marker:text-slate-400 dark:marker:text-slate-500">
       {children}
     </ul>
   ),
@@ -312,6 +312,12 @@ const agentConfig = {
     icon: FileText,
     gradient: "from-blue-500 to-indigo-600",
     textColor: "text-blue-600",
+  },
+  triage: {
+    name: "Broker Agent",
+    icon: MessageSquare,
+    gradient: "from-violet-500 to-purple-600",
+    textColor: "text-violet-600",
   },
 };
 
@@ -531,19 +537,8 @@ export function AIChatPanel({
   const handleSend = () => {
     if (!inputValue.trim() || isLoading) return;
 
-    // Detect agent type from prompt
-    let agentType: "claims" | "crosssell" | "quote" = "claims";
-    const lowerInput = inputValue.toLowerCase();
-    if (
-      lowerInput.includes("cross-sell") ||
-      lowerInput.includes("opportunity")
-    ) {
-      agentType = "crosssell";
-    } else if (lowerInput.includes("quote") || lowerInput.includes("price")) {
-      agentType = "quote";
-    }
-
-    sendMessage(inputValue, agentType);
+    // Always route through triage agent for LLM-based classification
+    sendMessage(inputValue, "triage");
     setInputValue("");
   };
 
@@ -600,7 +595,16 @@ export function AIChatPanel({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <MessageSquare className="h-4 w-4" />
-            <h3 className="font-semibold text-sm">AI Assistant</h3>
+            <div>
+              <h3 className="font-semibold text-sm">AI Assistant</h3>
+              <a href="https://ai.azure.com" target="_blank" rel="noopener noreferrer"
+                 className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-violet-500 transition-colors">
+                <svg className="h-2.5 w-2.5" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M12 2L15.09 8.26L22 9.27L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9.27L8.91 8.26L12 2Z" fill="currentColor"/>
+                </svg>
+                Powered by Microsoft Foundry
+              </a>
+            </div>
           </div>
           <Button
             variant="ghost"

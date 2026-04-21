@@ -5,7 +5,7 @@
     "_generator": {
       "name": "bicep",
       "version": "0.40.2.10011",
-      "templateHash": "4362164824867361729"
+      "templateHash": "18314893905788565505"
     }
   },
   "parameters": {
@@ -69,7 +69,7 @@
     },
     "aiFoundryName": {
       "type": "string",
-      "defaultValue": "[format('ai-{0}-{1}', parameters('baseName'), parameters('environment'))]",
+      "defaultValue": "",
       "metadata": {
         "description": "Globally unique name for the Azure AI Foundry account (Cognitive Services AIServices kind)"
       }
@@ -101,6 +101,13 @@
       "metadata": {
         "description": "OpenAI model version"
       }
+    },
+    "skipModelDeployment": {
+      "type": "bool",
+      "defaultValue": false,
+      "metadata": {
+        "description": "Skip model deployment (use when subscription lacks quota — deploy model via portal instead)"
+      }
     }
   },
   "variables": {
@@ -117,6 +124,7 @@
     "vnetName": "[format('vnet-{0}', variables('resourceSuffix'))]",
     "acrName": "[replace(format('acr{0}{1}', variables('resourceSuffix'), variables('uniqueSuffix')), '-', '')]",
     "keyVaultName": "[format('kv-{0}-{1}', take(variables('resourceSuffix'), 10), take(variables('uniqueSuffix'), 6))]",
+    "aiFoundryAccountName": "[if(not(equals(parameters('aiFoundryName'), '')), parameters('aiFoundryName'), format('ai-{0}-{1}', variables('resourceSuffix'), take(variables('uniqueSuffix'), 6)))]",
     "sqlSkuMap": {
       "dev": {
         "name": "Basic",
@@ -218,8 +226,8 @@
       "properties": {
         "Application_Type": "web",
         "WorkspaceResourceId": "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]",
-        "publicNetworkAccessForIngestion": "Disabled",
-        "publicNetworkAccessForQuery": "Disabled"
+        "publicNetworkAccessForIngestion": "[if(equals(parameters('environment'), 'prod'), 'Disabled', 'Enabled')]",
+        "publicNetworkAccessForQuery": "[if(equals(parameters('environment'), 'prod'), 'Disabled', 'Enabled')]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.OperationalInsights/workspaces', variables('logAnalyticsName'))]"
@@ -265,7 +273,7 @@
     {
       "type": "Microsoft.CognitiveServices/accounts",
       "apiVersion": "2025-04-01-preview",
-      "name": "[parameters('aiFoundryName')]",
+      "name": "[variables('aiFoundryAccountName')]",
       "location": "[parameters('location')]",
       "tags": "[union(variables('tags'), createObject('component', 'ai'))]",
       "identity": {
@@ -277,7 +285,7 @@
       "kind": "AIServices",
       "properties": {
         "allowProjectManagement": true,
-        "customSubDomainName": "[parameters('aiFoundryName')]",
+        "customSubDomainName": "[variables('aiFoundryAccountName')]",
         "disableLocalAuth": true,
         "publicNetworkAccess": "Enabled"
       }
@@ -285,7 +293,7 @@
     {
       "type": "Microsoft.CognitiveServices/accounts/projects",
       "apiVersion": "2025-04-01-preview",
-      "name": "[format('{0}/{1}', parameters('aiFoundryName'), parameters('aiProjectName'))]",
+      "name": "[format('{0}/{1}', variables('aiFoundryAccountName'), parameters('aiProjectName'))]",
       "location": "[parameters('location')]",
       "identity": {
         "type": "SystemAssigned"
@@ -295,13 +303,14 @@
         "displayName": "Broker Workbench Agents"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName'))]"
+        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName'))]"
       ]
     },
     {
+      "condition": "[not(parameters('skipModelDeployment'))]",
       "type": "Microsoft.CognitiveServices/accounts/deployments",
       "apiVersion": "2025-04-01-preview",
-      "name": "[format('{0}/{1}', parameters('aiFoundryName'), parameters('aiModelDeploymentName'))]",
+      "name": "[format('{0}/{1}', variables('aiFoundryAccountName'), parameters('aiModelDeploymentName'))]",
       "sku": {
         "capacity": 1,
         "name": "GlobalStandard"
@@ -314,7 +323,7 @@
         }
       },
       "dependsOn": [
-        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName'))]"
+        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName'))]"
       ]
     },
     {
@@ -379,31 +388,31 @@
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName'))]",
-      "name": "[guid(resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-backend-{0}', variables('resourceSuffix'))), 'azure-ai-user')]",
+      "scope": "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-backend-{0}', variables('resourceSuffix'))), 'azure-ai-user')]",
       "properties": {
         "principalId": "[reference(resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-backend-{0}', variables('resourceSuffix'))), '2023-01-31').principalId]",
         "principalType": "ServicePrincipal",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName'))]",
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-backend-{0}', variables('resourceSuffix')))]"
       ]
     },
     {
       "type": "Microsoft.Authorization/roleAssignments",
       "apiVersion": "2022-04-01",
-      "scope": "[resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName'))]",
-      "name": "[guid(resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName')), resourceId('Microsoft.CognitiveServices/accounts/projects', parameters('aiFoundryName'), parameters('aiProjectName')), 'azure-ai-user-project')]",
+      "scope": "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName'))]",
+      "name": "[guid(resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName')), resourceId('Microsoft.CognitiveServices/accounts/projects', variables('aiFoundryAccountName'), parameters('aiProjectName')), 'azure-ai-user-project')]",
       "properties": {
-        "principalId": "[reference(resourceId('Microsoft.CognitiveServices/accounts/projects', parameters('aiFoundryName'), parameters('aiProjectName')), '2025-04-01-preview', 'full').identity.principalId]",
+        "principalId": "[reference(resourceId('Microsoft.CognitiveServices/accounts/projects', variables('aiFoundryAccountName'), parameters('aiProjectName')), '2025-04-01-preview', 'full').identity.principalId]",
         "principalType": "ServicePrincipal",
         "roleDefinitionId": "[subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')]"
       },
       "dependsOn": [
-        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName'))]",
-        "[resourceId('Microsoft.CognitiveServices/accounts/projects', parameters('aiFoundryName'), parameters('aiProjectName'))]"
+        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts/projects', variables('aiFoundryAccountName'), parameters('aiProjectName'))]"
       ]
     },
     {
@@ -543,11 +552,11 @@
                 },
                 {
                   "name": "AZURE_AI_FOUNDRY_PROJECT_CONNECTION_STRING",
-                  "value": "[format('{0}/api/projects/{1}', reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName')), '2025-04-01-preview').endpoint, parameters('aiProjectName'))]"
+                  "value": "[format('{0}/api/projects/{1}', reference(resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName')), '2025-04-01-preview').endpoint, parameters('aiProjectName'))]"
                 },
                 {
                   "name": "AZURE_AI_FOUNDRY_ENDPOINT",
-                  "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName')), '2025-04-01-preview').endpoint]"
+                  "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName')), '2025-04-01-preview').endpoint]"
                 },
                 {
                   "name": "AZURE_AI_MODEL_DEPLOYMENT",
@@ -575,7 +584,7 @@
       "dependsOn": [
         "[resourceId('Microsoft.ContainerRegistry/registries', variables('acrName'))]",
         "[extensionResourceId(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), 'Microsoft.Authorization/roleAssignments', guid(resourceId('Microsoft.ContainerRegistry/registries', variables('acrName')), resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-backend-{0}', variables('resourceSuffix'))), 'acrpull'))]",
-        "[resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName'))]",
+        "[resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName'))]",
         "[resourceId('Microsoft.ManagedIdentity/userAssignedIdentities', format('id-backend-{0}', variables('resourceSuffix')))]",
         "[resourceId('Microsoft.App/managedEnvironments', variables('containerAppEnvName'))]",
         "[resourceId('Microsoft.KeyVault/vaults/secrets', variables('keyVaultName'), 'appinsights-connection-string')]",
@@ -661,7 +670,7 @@
       "properties": {
         "version": "12.0",
         "minimalTlsVersion": "1.2",
-        "publicNetworkAccess": "Disabled",
+        "publicNetworkAccess": "[if(equals(parameters('environment'), 'prod'), 'Disabled', 'Enabled')]",
         "administrators": {
           "administratorType": "ActiveDirectory",
           "principalType": "User",
@@ -686,7 +695,8 @@
       "properties": {
         "collation": "SQL_Latin1_General_CP1_CI_AS",
         "maxSizeBytes": 2147483648,
-        "zoneRedundant": "[equals(parameters('environment'), 'prod')]"
+        "zoneRedundant": "[equals(parameters('environment'), 'prod')]",
+        "requestedBackupStorageRedundancy": "[if(equals(parameters('environment'), 'prod'), 'Geo', 'Local')]"
       },
       "dependsOn": [
         "[resourceId('Microsoft.Sql/servers', variables('sqlServerName'))]"
@@ -858,14 +868,14 @@
       "metadata": {
         "description": "Azure AI Foundry account endpoint"
       },
-      "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName')), '2025-04-01-preview').endpoint]"
+      "value": "[reference(resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName')), '2025-04-01-preview').endpoint]"
     },
     "aiFoundryProjectEndpoint": {
       "type": "string",
       "metadata": {
         "description": "Azure AI Foundry project endpoint (for SDK connection)"
       },
-      "value": "[format('{0}/api/projects/{1}', reference(resourceId('Microsoft.CognitiveServices/accounts', parameters('aiFoundryName')), '2025-04-01-preview').endpoint, parameters('aiProjectName'))]"
+      "value": "[format('{0}/api/projects/{1}', reference(resourceId('Microsoft.CognitiveServices/accounts', variables('aiFoundryAccountName')), '2025-04-01-preview').endpoint, parameters('aiProjectName'))]"
     },
     "resourceNames": {
       "type": "object",
@@ -882,7 +892,7 @@
         "acr": "[variables('acrName')]",
         "keyVault": "[variables('keyVaultName')]",
         "vnet": "[variables('vnetName')]",
-        "aiFoundry": "[parameters('aiFoundryName')]",
+        "aiFoundry": "[variables('aiFoundryAccountName')]",
         "aiProject": "[parameters('aiProjectName')]"
       }
     }

@@ -70,7 +70,7 @@ export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: Date;
-  agentType?: 'claims' | 'crosssell' | 'quote';
+  agentType?: 'claims' | 'crosssell' | 'quote' | 'triage';
   suggestions?: string[];
 }
 

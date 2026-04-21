@@ -120,7 +120,7 @@ export function useChat() {
   const sendMessage = useCallback(
     async (
       content: string,
-      agentType: "claims" | "crosssell" | "quote" = "claims",
+      agentType: "claims" | "crosssell" | "quote" | "triage" = "triage",
     ) => {
       const userMessage: ChatMessage = {
         id: Date.now().toString(),
@@ -198,12 +198,23 @@ export function useChat() {
             } else if (event.type === "done") {
               setStatusMessage(null);
               const finalContent = fullContent;
+              // Map backend agent name to frontend agentType key
+              const agentNameMap: Record<string, string> = {
+                ClaimsImpactAgent: "claims",
+                CrossSellAgent: "crosssell",
+                QuoteComparisonAgent: "quote",
+                BrokerAgent: "triage",
+              };
+              const resolvedAgent = event.agent
+                ? agentNameMap[event.agent] ?? agentType
+                : agentType;
               setMessages((prev) =>
                 prev.map((m) =>
                   m.id === assistantId
                     ? {
                         ...m,
                         content: finalContent,
+                        agentType: resolvedAgent as ChatMessage["agentType"],
                         suggestions: extractSuggestions(finalContent),
                       }
                     : m,

@@ -23,8 +23,11 @@ from .tools import (
 from .quote_agent import QuoteComparisonAgent
 from .crosssell_agent import CrossSellAgent
 from .claims_agent import ClaimsImpactAgent
+from .triage_agent import TriageAgent
 
 __all__ = [
+    # Agents
+    "TriageAgent",
     # Tools
     "get_client_info",
     "get_client_policies", 

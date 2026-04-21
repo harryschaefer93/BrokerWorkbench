@@ -15,6 +15,7 @@ import os
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
 # Original routers (mock data)
 from routers import policies, clients, carriers, renewals
@@ -47,7 +48,8 @@ Backend API for the Insurance Broker Workbench - Strategic Non-Accelerate 3 Hack
     """,
     version="0.2.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    redirect_slashes=False,
 )
 
 # Configure CORS — restrict origins in production, allow all in dev

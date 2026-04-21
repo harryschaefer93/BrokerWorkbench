@@ -15,10 +15,10 @@ interface Quote {
 
 // Mock quotes for demo - in real app, this would come from API
 const mockQuotes: Quote[] = [
-  { carrier_name: 'State Farm', carrier_id: 'CAR001', premium: 2280, current: true, status: 'ready' },
-  { carrier_name: 'Allstate', carrier_id: 'CAR002', premium: 2150, savings: 130, status: 'ready' },
-  { carrier_name: 'Progressive', carrier_id: 'CAR003', premium: 2090, savings: 190, status: 'ready' },
-  { carrier_name: 'Geico', carrier_id: 'CAR004', premium: 0, status: 'pending' },
+  { carrier_name: 'Liberty Mutual', carrier_id: 'CAR001', premium: 45000, current: true, status: 'ready' },
+  { carrier_name: 'The Hartford', carrier_id: 'CAR002', premium: 42500, savings: 2500, status: 'ready' },
+  { carrier_name: 'Travelers', carrier_id: 'CAR003', premium: 41200, savings: 3800, status: 'ready' },
+  { carrier_name: 'CNA Insurance', carrier_id: 'CAR004', premium: 0, status: 'pending' },
 ];
 
 interface CarrierQuoteCardProps {

@@ -32,7 +32,7 @@ param backendContainerImage string
 param extraTags object = {}
 
 @description('Globally unique name for the Azure AI Foundry account (Cognitive Services AIServices kind)')
-param aiFoundryName string = 'ai-${baseName}-${environment}'
+param aiFoundryName string = ''
 
 @description('Name for the AI Foundry project (child of the Foundry account)')
 param aiProjectName string = '${baseName}-agents'
@@ -45,6 +45,9 @@ param aiModelName string = 'gpt-4.1'
 
 @description('OpenAI model version')
 param aiModelVersion string = '2025-04-14'
+
+@description('Skip model deployment (use when subscription lacks quota — deploy model via portal instead)')
+param skipModelDeployment bool = false
 
 // Variables
 
@@ -65,6 +68,7 @@ var logAnalyticsName = 'log-${resourceSuffix}'
 var vnetName = 'vnet-${resourceSuffix}'
 var acrName = replace('acr${resourceSuffix}${uniqueSuffix}', '-', '')
 var keyVaultName = 'kv-${take(resourceSuffix, 10)}-${take(uniqueSuffix, 6)}'
+var aiFoundryAccountName = aiFoundryName != '' ? aiFoundryName : 'ai-${resourceSuffix}-${take(uniqueSuffix, 6)}'
 
 var sqlSkuMap = {
   dev: { name: 'Basic', tier: 'Basic', capacity: 5 }
@@ -138,8 +142,8 @@ resource appInsights 'Microsoft.Insights/components@2020-02-02' = {
   properties: {
     Application_Type: 'web'
     WorkspaceResourceId: logAnalytics.id
-    publicNetworkAccessForIngestion: 'Disabled'
-    publicNetworkAccessForQuery: 'Disabled'
+    publicNetworkAccessForIngestion: environment == 'prod' ? 'Disabled' : 'Enabled'
+    publicNetworkAccessForQuery: environment == 'prod' ? 'Disabled' : 'Enabled'
   }
 }
 
@@ -180,7 +184,7 @@ resource keyVault 'Microsoft.KeyVault/vaults@2023-07-01' = {
 // ── Azure AI Foundry (Cognitive Services AIServices with project management) ──
 
 resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
-  name: aiFoundryName
+  name: aiFoundryAccountName
   location: location
   tags: union(tags, { component: 'ai' })
   identity: {
@@ -192,7 +196,7 @@ resource aiFoundry 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
   kind: 'AIServices'
   properties: {
     allowProjectManagement: true
-    customSubDomainName: aiFoundryName
+    customSubDomainName: aiFoundryAccountName
     disableLocalAuth: true
     publicNetworkAccess: 'Enabled'
   }
@@ -211,7 +215,7 @@ resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-pre
   }
 }
 
-resource aiModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = {
+resource aiModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (!skipModelDeployment) {
   parent: aiFoundry
   name: aiModelDeploymentName
   sku: {
@@ -506,7 +510,7 @@ resource sqlServer 'Microsoft.Sql/servers@2023-08-01-preview' = {
   properties: {
     version: '12.0'
     minimalTlsVersion: '1.2'
-    publicNetworkAccess: 'Disabled'
+    publicNetworkAccess: environment == 'prod' ? 'Disabled' : 'Enabled'
     administrators: {
       administratorType: 'ActiveDirectory'
       principalType: 'User'
@@ -534,6 +538,7 @@ resource sqlDatabase 'Microsoft.Sql/servers/databases@2023-08-01-preview' = {
     collation: 'SQL_Latin1_General_CP1_CI_AS'
     maxSizeBytes: 2147483648
     zoneRedundant: environment == 'prod'
+    requestedBackupStorageRedundancy: environment == 'prod' ? 'Geo' : 'Local'
   }
 }
 
