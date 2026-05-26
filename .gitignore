@@ -38,6 +38,10 @@ backend/local.db
 # TypeScript build info
 *.tsbuildinfo
 
+# Compiled ARM templates from Bicep (regenerated on every build)
+infra/*.json
+!infra/*.bicepparam.json
+
 # Project brief (local context, not committed)
 BRIEF.md
 
