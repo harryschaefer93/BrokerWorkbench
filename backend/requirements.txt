@@ -11,6 +11,7 @@ python-dotenv>=1.0.0
 
 # Azure AI Agents (Azure AI Foundry)
 azure-ai-projects>=1.0.0b7
+azure-ai-inference>=1.0.0b9
 azure-identity>=1.15.0
 openai>=1.40.0
 

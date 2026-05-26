@@ -45,68 +45,94 @@ def _fallback(industry: str, claim_type: str, severity_bucket: str) -> str:
     return f"{industry} {pretty_claim} incident, {severity_bucket} severity"
 
 
-async def _call_azure_openai(uncached_keys: List[str]) -> Dict[str, str]:
-    """Make ONE batched chat completion for all uncached keys. Returns {} on any failure."""
-    endpoint = os.getenv("AZURE_AI_FOUNDRY_ENDPOINT")
-    deployment = os.getenv("AZURE_AI_MODEL_DEPLOYMENT", "gpt-4.1")
-    api_version = os.getenv("AZURE_AI_API_VERSION", "2024-12-01-preview")
+async def _call_azure_inference(uncached_keys: List[str]) -> Dict[str, str]:
+    """Make ONE batched chat completion for all uncached keys.
+
+    Uses the Azure AI Inference SDK (`azure-ai-inference`) so it works against
+    any chat-completion model deployed on the AI Foundry resource — MaaS
+    (Kimi, Mistral, Llama, DeepSeek, etc.) or Azure OpenAI (gpt-4.x).
+    Returns {} on any failure; the caller falls back to deterministic templates.
+    """
+    endpoint = os.getenv("AZURE_AI_INFERENCE_ENDPOINT") or os.getenv("AZURE_AI_FOUNDRY_ENDPOINT")
+    deployment = os.getenv("AZURE_AI_MODEL_DEPLOYMENT", "Kimi-K2.6")
+    api_version = os.getenv("AZURE_AI_API_VERSION", "2024-05-01-preview")
 
     if not endpoint:
-        logger.warning("AZURE_AI_FOUNDRY_ENDPOINT not set — using fallback descriptions.")
+        logger.warning(
+            "Neither AZURE_AI_INFERENCE_ENDPOINT nor AZURE_AI_FOUNDRY_ENDPOINT "
+            "is set — using fallback descriptions."
+        )
         return {}
 
     try:
-        # Build a ChainedTokenCredential inline so we don't trigger the full
-        # backend.agents package import (which pulls in mock_data and tools).
-        from azure.identity import (
-            ChainedTokenCredential, EnvironmentCredential,
-            ManagedIdentityCredential, AzureCliCredential,
-            get_bearer_token_provider,
+        from azure.ai.inference.aio import ChatCompletionsClient
+        from azure.ai.inference.models import SystemMessage, UserMessage
+        from azure.identity.aio import (
+            ChainedTokenCredential,
+            EnvironmentCredential,
+            ManagedIdentityCredential,
+            AzureCliCredential,
         )
-        from openai import AsyncAzureOpenAI
     except ImportError as exc:
-        logger.warning("openai/azure-identity import failed (%s) — using fallback.", exc)
+        logger.warning(
+            "azure-ai-inference / azure-identity import failed (%s) — using fallback.", exc
+        )
         return {}
 
+    client_id = os.getenv("AZURE_CLIENT_ID")
+    credential = ChainedTokenCredential(
+        EnvironmentCredential(),
+        ManagedIdentityCredential(client_id=client_id),
+        AzureCliCredential(),
+    )
     try:
-        client_id = os.getenv("AZURE_CLIENT_ID")
-        credential = ChainedTokenCredential(
-            EnvironmentCredential(),
-            ManagedIdentityCredential(client_id=client_id),
-            AzureCliCredential(),
-        )
-        token_provider = get_bearer_token_provider(
-            credential, "https://cognitiveservices.azure.com/.default"
-        )
-        client = AsyncAzureOpenAI(
-            azure_endpoint=endpoint,
-            azure_ad_token_provider=token_provider,
+        async with ChatCompletionsClient(
+            endpoint=endpoint,
+            credential=credential,
+            credential_scopes=["https://cognitiveservices.azure.com/.default"],
             api_version=api_version,
-        )
-        prompt = (
-            "For each composite key below, return ONE realistic, neutral, "
-            "1-2 sentence commercial-insurance claim description. "
-            "Key format: 'industry|claim_type|severity_bucket' "
-            "(severity_bucket in low|medium|high). "
-            "Return ONLY a JSON object mapping each composite key string to its "
-            "description string. No markdown, no commentary.\n\n"
-            f"Keys: {json.dumps(uncached_keys)}"
-        )
-        completion = await client.chat.completions.create(
-            model=deployment,
-            response_format={"type": "json_object"},
-            messages=[
-                {"role": "system", "content": "You generate concise, realistic commercial insurance claim descriptions. Output JSON only."},
-                {"role": "user", "content": prompt},
-            ],
-            temperature=0.7,
-        )
-        raw = completion.choices[0].message.content or "{}"
+        ) as client:
+            prompt = (
+                "For each composite key below, return ONE realistic, neutral, "
+                "1-2 sentence commercial-insurance claim description. "
+                "Key format: 'industry|claim_type|severity_bucket' "
+                "(severity_bucket in low|medium|high). "
+                "Return ONLY a JSON object mapping each composite key string to its "
+                "description string. No markdown, no commentary.\n\n"
+                f"Keys: {json.dumps(uncached_keys)}"
+            )
+            response = await client.complete(
+                model=deployment,
+                messages=[
+                    SystemMessage(
+                        content=(
+                            "You generate concise, realistic commercial insurance "
+                            "claim descriptions. Output JSON only."
+                        )
+                    ),
+                    UserMessage(content=prompt),
+                ],
+                temperature=0.7,
+                response_format="json_object",
+            )
+        raw = (response.choices[0].message.content or "{}").strip()
+        # Some MaaS models still wrap JSON in markdown fences even when
+        # response_format=json_object is requested. Strip them defensively.
+        if raw.startswith("```"):
+            raw = raw.strip("`")
+            if raw.lower().startswith("json"):
+                raw = raw[4:]
+            raw = raw.strip()
         parsed = json.loads(raw)
         return {k: str(v).strip() for k, v in parsed.items() if isinstance(v, str)}
     except Exception as exc:  # noqa: BLE001 — never block the seeder
-        logger.warning("Azure OpenAI call failed (%s) — using fallback descriptions.", exc)
+        logger.warning("Azure AI Inference call failed (%s) — using fallback descriptions.", exc)
         return {}
+    finally:
+        try:
+            await credential.close()
+        except Exception:  # noqa: BLE001
+            pass
 
 
 async def get_claim_descriptions(
@@ -121,7 +147,7 @@ async def get_claim_descriptions(
 
     if uncached:
         uncached_keys = [_key(*s) for s in uncached]
-        gpt_results = await _call_azure_openai(uncached_keys)
+        gpt_results = await _call_azure_inference(uncached_keys)
         for spec in uncached:
             k = _key(*spec)
             cache[k] = gpt_results.get(k) or _fallback(*spec)
