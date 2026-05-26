@@ -32,8 +32,24 @@ Thumbs.db
 *.log
 logs/
 
-# Local SQLite databases (generated at runtime)
+# Local SQLite databases (generated at runtime by the seeder)
 backend/local.db
+data/db/*.db
+
+# Seed cache (regenerated on first run; keep the .gitkeep marker)
+data/seed/.cache/*
+!data/seed/.cache/.gitkeep
+
+# Test artifacts
+.pytest_cache/
+tests/e2e/node_modules/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/playwright/.cache/
+
+# Azure dev artifacts
+.azure/
+azd-env-*.json
 
 # TypeScript build info
 *.tsbuildinfo

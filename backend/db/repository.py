@@ -62,6 +62,15 @@ class CarrierRepository:
         )
         return list(result.scalars().all())
 
+    @staticmethod
+    async def bulk_create(db: AsyncSession, carriers: List[Dict[str, Any]]) -> int:
+        """Bulk insert carriers. Each dict has Carrier model field names. Commits. Returns rowcount."""
+        if not carriers:
+            return 0
+        db.add_all([Carrier(**c) for c in carriers])
+        await db.commit()
+        return len(carriers)
+
 
 # ============ Client Repository ============
 
@@ -123,6 +132,15 @@ class ClientRepository:
             .order_by(Client.total_premium_ytd.desc())
         )
         return list(result.scalars().all())
+
+    @staticmethod
+    async def bulk_create(db: AsyncSession, clients: List[Dict[str, Any]]) -> int:
+        """Bulk insert clients. Each dict has Client model field names. Commits. Returns rowcount."""
+        if not clients:
+            return 0
+        db.add_all([Client(**c) for c in clients])
+        await db.commit()
+        return len(clients)
 
 
 # ============ Policy Repository ============
@@ -274,6 +292,15 @@ class PolicyRepository:
         )
         await db.commit()
         return await PolicyRepository.get_by_id(db, policy_id)
+
+    @staticmethod
+    async def bulk_create(db: AsyncSession, policies: List[Dict[str, Any]]) -> int:
+        """Bulk insert policies. Each dict has Policy model field names. Commits. Returns rowcount."""
+        if not policies:
+            return 0
+        db.add_all([Policy(**p) for p in policies])
+        await db.commit()
+        return len(policies)
 
 
 # ============ Quote Repository ============
@@ -456,6 +483,85 @@ class ClaimRepository:
         )
         return list(result.scalars().all())
 
+    @staticmethod
+    async def get_by_client(db: AsyncSession, client_id: int) -> List[Claim]:
+        """Get all claims for a client (joined via policies)."""
+        result = await db.execute(
+            select(Claim)
+            .join(Policy, Claim.policy_id == Policy.policy_id)
+            .where(Policy.client_id == client_id)
+            .order_by(Claim.date_of_loss.desc())
+        )
+        return list(result.scalars().all())
+
+    @staticmethod
+    async def get_aggregated_by_year(
+        db: AsyncSession, client_id: int, years: int = 3
+    ) -> List[Dict[str, Any]]:
+        """Aggregate claims by year for the last N years for a client.
+
+        Returns entries ordered oldest -> newest with zero-count years included.
+        loss_ratio = sum(claim_amount) / sum(Policy.premium_amount for active
+        policies that year). If no premium for that year, loss_ratio = 0.
+        """
+        current_year = date.today().year
+        start_year = current_year - years + 1
+        start_date = date(start_year, 1, 1)
+
+        claim_rows = (await db.execute(
+            select(Claim)
+            .join(Policy, Claim.policy_id == Policy.policy_id)
+            .where(
+                and_(
+                    Policy.client_id == client_id,
+                    Claim.date_of_loss >= start_date,
+                )
+            )
+        )).scalars().all()
+
+        policies = list((await db.execute(
+            select(Policy).where(Policy.client_id == client_id)
+        )).scalars().all())
+
+        buckets: Dict[int, Dict[str, Any]] = {
+            y: {"year": y, "claim_count": 0, "total_incurred": 0.0, "loss_ratio": 0.0}
+            for y in range(start_year, current_year + 1)
+        }
+
+        for claim in claim_rows:
+            if claim.date_of_loss is None:
+                continue
+            y = claim.date_of_loss.year
+            if y in buckets:
+                buckets[y]["claim_count"] += 1
+                buckets[y]["total_incurred"] += float(claim.claim_amount or 0)
+
+        for y, bucket in buckets.items():
+            year_start = date(y, 1, 1)
+            year_end = date(y, 12, 31)
+            premium = 0.0
+            for p in policies:
+                if (
+                    p.effective_date is not None
+                    and p.effective_date <= year_end
+                    and (p.expiration_date is None or p.expiration_date >= year_start)
+                ):
+                    premium += float(p.premium_amount or 0)
+            bucket["loss_ratio"] = (
+                bucket["total_incurred"] / premium if premium > 0 else 0.0
+            )
+
+        return [buckets[y] for y in sorted(buckets.keys())]
+
+    @staticmethod
+    async def bulk_create(db: AsyncSession, claims: List[Dict[str, Any]]) -> int:
+        """Bulk insert claims. Each dict has Claim model field names. Commits. Returns rowcount."""
+        if not claims:
+            return 0
+        db.add_all([Claim(**c) for c in claims])
+        await db.commit()
+        return len(claims)
+
 
 # ============ Cross-Sell Opportunity Repository ============
 
@@ -574,3 +680,43 @@ class MarketRateRepository:
             }
             for rate, carrier in result.all()
         ]
+
+    @staticmethod
+    async def get_by_carrier_and_category(
+        db: AsyncSession, carrier_id: int, product_category: str
+    ) -> Optional[MarketRate]:
+        """Get the active market rate row for a (carrier, product_category) combo.
+
+        'Active' = effective_date <= today AND
+                   (expiration_date IS NULL OR expiration_date >= today).
+        If multiple match, return the one with the most recent effective_date.
+        """
+        today = date.today()
+        result = await db.execute(
+            select(MarketRate)
+            .where(
+                and_(
+                    MarketRate.carrier_id == carrier_id,
+                    MarketRate.product_category == product_category,
+                    or_(
+                        MarketRate.effective_date.is_(None),
+                        MarketRate.effective_date <= today,
+                    ),
+                    or_(
+                        MarketRate.expiration_date.is_(None),
+                        MarketRate.expiration_date >= today,
+                    ),
+                )
+            )
+            .order_by(MarketRate.effective_date.desc())
+        )
+        return result.scalars().first()
+
+    @staticmethod
+    async def bulk_create(db: AsyncSession, rates: List[Dict[str, Any]]) -> int:
+        """Bulk insert market rates. Each dict has MarketRate model field names. Commits. Returns rowcount."""
+        if not rates:
+            return 0
+        db.add_all([MarketRate(**r) for r in rates])
+        await db.commit()
+        return len(rates)

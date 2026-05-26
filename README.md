@@ -386,3 +386,28 @@ az cognitiveservices account deployment list \
 - [BRIEF.md](BRIEF.md) — Project manifest, completed work, and debugging log
 - [infra/README.md](infra/README.md) — Azure infrastructure and deployment guide
 - [frontend-react/README.md](frontend-react/README.md) — React frontend documentation
+
+---
+
+## 🧪 Running tests
+
+Backend + MCP (pytest, 54 tests):
+
+```bash
+pip install -r tests/requirements.txt
+python -m data.seed.setup --reseed     # one-time: populate SQLite under data/db/
+pytest tests/                          # boots mcp_server.server on a free port
+```
+
+Frontend smoke (Playwright, 1 spec):
+
+```bash
+cd tests/e2e
+npm install
+npx playwright install chromium
+# Requires the frontend running on http://localhost:8080
+npx playwright test
+```
+
+CI runs both jobs on every push/PR to `main` and `fieldday`. See
+[.github/workflows/test.yml](.github/workflows/test.yml).

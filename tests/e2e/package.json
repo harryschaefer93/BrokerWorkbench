@@ -1,0 +1,15 @@
+{
+  "name": "brokerworkbench-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Playwright smoke tests for the BrokerWorkbench React frontend.",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.45.0",
+    "typescript": "^5.4.0"
+  }
+}
