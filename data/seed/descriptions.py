@@ -54,7 +54,9 @@ async def _call_azure_inference(uncached_keys: List[str]) -> Dict[str, str]:
     Returns {} on any failure; the caller falls back to deterministic templates.
     """
     endpoint = os.getenv("AZURE_AI_INFERENCE_ENDPOINT") or os.getenv("AZURE_AI_FOUNDRY_ENDPOINT")
-    deployment = os.getenv("AZURE_AI_MODEL_DEPLOYMENT", "Kimi-K2.6")
+    # Seeder uses its own deployment var so it can stay on Kimi-K2.6 even when the
+    # agent's AZURE_AI_MODEL_DEPLOYMENT is pointed at gpt-5 in another region.
+    deployment = os.getenv("AZURE_AI_INFERENCE_MODEL_DEPLOYMENT") or os.getenv("AZURE_AI_MODEL_DEPLOYMENT", "Kimi-K2.6")
     api_version = os.getenv("AZURE_AI_API_VERSION", "2024-05-01-preview")
 
     if not endpoint:
