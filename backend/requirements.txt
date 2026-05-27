@@ -15,5 +15,11 @@ azure-ai-inference>=1.0.0b9
 azure-identity>=1.15.0
 openai>=1.40.0
 
+# Microsoft Agent Framework — Foundry handoff orchestration (Phase A sub-step 2)
+# Core package + the separate orchestrations package (HandoffBuilder lives there).
+# Orchestrations is still on its own rc track; core is on 1.6.x.
+agent-framework>=1.6.0
+agent-framework-orchestrations>=1.0.0rc2
+
 # Azure SQL async support
 aioodbc>=0.5.0

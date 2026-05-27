@@ -34,7 +34,11 @@ logs/
 
 # Local SQLite databases (generated at runtime by the seeder)
 backend/local.db
+backend/data/*.db
 data/db/*.db
+
+# Scratch / snapshot notes (local only)
+docs/snap*.md
 
 # Seed cache (regenerated on first run; keep the .gitkeep marker)
 data/seed/.cache/*
