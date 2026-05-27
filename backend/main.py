@@ -26,6 +26,9 @@ from routers import policies_v2, clients_v2, carriers_v2, renewals_v2
 # AI Agent router (Phase 2)
 from routers import agents
 
+# AI Agent handoff router (Phase A sub-step 3 — Agent Framework HandoffBuilder)
+from routers import agents_handoff
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Insurance Broker Workbench API",
@@ -82,6 +85,7 @@ app.include_router(renewals_v2.router)
 
 # Include AI Agent router
 app.include_router(agents.router)
+app.include_router(agents_handoff.router)
 
 
 @app.get("/")

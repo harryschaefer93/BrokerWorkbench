@@ -122,6 +122,7 @@ export function useChat() {
       content: string,
       agentType: "claims" | "crosssell" | "quote" | "triage" = "triage",
       history?: { role: "user" | "assistant"; content: string }[],
+      useHandoff: boolean = false,
     ) => {
       const userMessage: ChatMessage = {
         id: Date.now().toString(),
@@ -147,7 +148,10 @@ export function useChat() {
       setMessages((prev) => [...prev, placeholder]);
 
       try {
-        const response = await fetch(`${API_BASE}/agent/chat/stream`, {
+        const endpoint = useHandoff
+          ? `${API_BASE}/agent/chat/handoff/stream`
+          : `${API_BASE}/agent/chat/stream`;
+        const response = await fetch(endpoint, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ message: content, agent: agentType, history: history || [] }),

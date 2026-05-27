@@ -484,6 +484,10 @@ export function AIChatPanel({
   const [isResizing, setIsResizing] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isClearing, setIsClearing] = useState(false);
+  // Hidden-by-default preview switch: route through the Agent Framework
+  // HandoffBuilder workflow instead of the legacy per-agent streaming
+  // endpoint. Same SSE contract on the wire.
+  const [useHandoff, setUseHandoff] = useState(false);
 
   const {
     messages,
@@ -545,7 +549,7 @@ export function AIChatPanel({
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
     // Always route through triage agent for LLM-based classification
-    sendMessage(inputValue, "triage", history);
+    sendMessage(inputValue, "triage", history, useHandoff);
     setInputValue("");
   };
 
@@ -623,6 +627,18 @@ export function AIChatPanel({
             Clear
           </Button>
         </div>
+
+        {/* Preview: route through Agent Framework HandoffBuilder workflow.
+            Off by default. Same SSE contract — UI behaves identically. */}
+        <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-2 cursor-pointer select-none">
+          <input
+            type="checkbox"
+            checked={useHandoff}
+            onChange={(e) => setUseHandoff(e.target.checked)}
+            className="h-3 w-3 cursor-pointer"
+          />
+          Use handoff orchestration (preview)
+        </label>
 
         {/* Messages */}
         <ScrollArea ref={scrollRef} className="flex-1 pr-2 -mr-2">
