@@ -6,7 +6,7 @@ loaded verbatim from :data:`backend.agents.config.AGENT_CONFIGS` (key
 """
 from __future__ import annotations
 
-from backend.agents.config import AGENT_CONFIGS
+from agents.config import AGENT_CONFIGS
 
 
 def build_triage_agent(chat_client, mcp_tool):

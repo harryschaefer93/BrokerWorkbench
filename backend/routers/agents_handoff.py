@@ -98,7 +98,7 @@ async def _stream_handoff(request: ChatRequest):
     """Adapt Agent Framework WorkflowEvent stream → 5-frame SSE."""
     # Import lazily so the legacy endpoint and test collection don't pay
     # the agent-framework import cost when this endpoint isn't called.
-    from backend.agents.foundry.handoff import build_handoff
+    from agents.foundry.handoff import build_handoff
 
     prompt = _build_prompt(request.message, request.history)
     last_speaker: str | None = None

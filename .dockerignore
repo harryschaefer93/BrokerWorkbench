@@ -1,0 +1,46 @@
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Node
+node_modules/
+frontend-react/node_modules/
+frontend-react/dist/
+
+# Git / IDE
+.git/
+.gitignore
+.github/
+.vscode/
+.devcontainer/
+
+# Logs / temp
+*.log
+push.log
+mcp_build.log
+mcp_smoke.log
+mcp_smoke.err.log
+smoke_out.log
+
+# Screenshots / docs (not needed in any image)
+*.png
+docs/
+.playwright-mcp/
+
+# Tests
+tests/
+e2e/
+
+# Env files (never bake into images)
+.env
+.env.local
+
+# OS junk
+.DS_Store
+Thumbs.db

@@ -16,7 +16,8 @@ param sqlAadAdminName = 'Harry Schaefer'
 //   mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
 // Then build, push, and update with: az containerapp update --image ...
 param frontendContainerImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
-param backendContainerImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
+param backendContainerImage = 'acrbrokerworkbenchdev2qdxa3smrnc7a.azurecr.io/broker-backend:handoff-importfix'
+param mcpContainerImage = 'acrbrokerworkbenchdev2qdxa3smrnc7a.azurecr.io/broker-mcp:handoff-df3691d'
 
 // Additional MCAPS-required tags (cost center, business owner, data classification, etc.)
 param extraTags = {

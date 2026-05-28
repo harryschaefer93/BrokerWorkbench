@@ -4,7 +4,7 @@ Instructions loaded verbatim from ``AGENT_CONFIGS["claims_impact"]``.
 """
 from __future__ import annotations
 
-from backend.agents.config import AGENT_CONFIGS
+from agents.config import AGENT_CONFIGS
 
 
 def build_claims_agent(chat_client, mcp_tool):
