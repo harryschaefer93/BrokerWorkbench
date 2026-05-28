@@ -257,8 +257,7 @@ async def _stream_agent(request: ChatRequest):
                 messages=messages,
                 tools=tools if tools else None,
                 tool_choice="auto" if tools else None,
-                max_tokens=config.max_tokens,
-                temperature=config.temperature,
+                max_completion_tokens=config.max_completion_tokens,
             )
             assistant_msg = response.choices[0].message
 
@@ -293,8 +292,7 @@ async def _stream_agent(request: ChatRequest):
             model=config.model_deployment,
             messages=messages,
             stream=True,
-            max_tokens=config.max_tokens,
-            temperature=config.temperature,
+            max_completion_tokens=config.max_completion_tokens,
         )
 
         full_response = ""
@@ -422,8 +420,7 @@ async def _run_agent(request: ChatRequest) -> ChatResponse:
                 messages=messages,
                 tools=tools if tools else None,
                 tool_choice="auto" if tools else None,
-                max_tokens=config.max_tokens,
-                temperature=config.temperature,
+                max_completion_tokens=config.max_completion_tokens,
             )
             assistant_msg = response.choices[0].message
 
@@ -454,8 +451,7 @@ async def _run_agent(request: ChatRequest) -> ChatResponse:
             response = await client.chat.completions.create(
                 model=config.model_deployment,
                 messages=messages,
-                max_tokens=config.max_tokens,
-                temperature=config.temperature,
+                max_completion_tokens=config.max_completion_tokens,
             )
             assistant_msg = response.choices[0].message
 

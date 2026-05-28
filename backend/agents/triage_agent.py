@@ -93,8 +93,7 @@ class TriageAgent:
                 {"role": "system", "content": CLASSIFY_SYSTEM_PROMPT},
                 {"role": "user", "content": user_message},
             ],
-            max_tokens=100,
-            temperature=0.1,
+            max_completion_tokens=100,
             response_format={"type": "json_object"},
         )
 
@@ -156,8 +155,7 @@ class TriageAgent:
             messages=messages,
             tools=tools if tools else None,
             tool_choice="auto" if tools else None,
-            max_tokens=self.config.max_tokens,
-            temperature=self.config.temperature,
+            max_completion_tokens=self.config.max_completion_tokens,
         )
         assistant_message = response.choices[0].message
 
@@ -191,8 +189,7 @@ class TriageAgent:
                 messages=messages,
                 tools=tools if tools else None,
                 tool_choice="auto" if tools else None,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature,
+                max_completion_tokens=self.config.max_completion_tokens,
             )
             assistant_message = response.choices[0].message
 

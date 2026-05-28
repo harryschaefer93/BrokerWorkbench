@@ -75,8 +75,7 @@ class ClaimsImpactAgent:
             messages=messages,
             tools=tools if tools else None,
             tool_choice="auto" if tools else None,
-            max_tokens=self.config.max_tokens,
-            temperature=self.config.temperature
+            max_completion_tokens=self.config.max_completion_tokens,
         )
         
         assistant_message = response.choices[0].message
@@ -113,8 +112,7 @@ class ClaimsImpactAgent:
                 messages=messages,
                 tools=tools if tools else None,
                 tool_choice="auto" if tools else None,
-                max_tokens=self.config.max_tokens,
-                temperature=self.config.temperature
+                max_completion_tokens=self.config.max_completion_tokens,
             )
             
             assistant_message = response.choices[0].message

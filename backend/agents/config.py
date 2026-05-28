@@ -26,10 +26,9 @@ class AgentConfig:
     model_deployment: str
     
     # Optional settings
-    api_version: str = "2024-12-01-preview"
-    max_tokens: int = 4096
-    temperature: float = 0.4
-    
+    api_version: str = "2025-03-01-preview"
+    max_completion_tokens: int = 4096
+
     @classmethod
     def from_env(cls) -> "AgentConfig":
         """Load configuration from environment variables."""
@@ -45,9 +44,8 @@ class AgentConfig:
         return cls(
             endpoint=endpoint,
             model_deployment=model,
-            api_version=os.getenv("AZURE_AI_API_VERSION", "2024-12-01-preview"),
-            max_tokens=int(os.getenv("AZURE_AI_MAX_TOKENS", "4096")),
-            temperature=float(os.getenv("AZURE_AI_TEMPERATURE", "0.7")),
+            api_version=os.getenv("AZURE_AI_API_VERSION", "2025-03-01-preview"),
+            max_completion_tokens=int(os.getenv("AZURE_AI_MAX_TOKENS", "4096")),
         )
 
 

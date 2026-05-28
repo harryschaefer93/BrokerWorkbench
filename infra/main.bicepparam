@@ -15,8 +15,8 @@ param sqlAadAdminName = 'Harry Schaefer'
 // For first-time deploys to a NEW environment, use MCR placeholder:
 //   mcr.microsoft.com/azuredocs/containerapps-helloworld:latest
 // Then build, push, and update with: az containerapp update --image ...
-param frontendContainerImage = 'mcr.microsoft.com/azuredocs/containerapps-helloworld:latest'
-param backendContainerImage = 'acrbrokerworkbenchdev2qdxa3smrnc7a.azurecr.io/broker-backend:handoff-importfix'
+param frontendContainerImage = 'acrbrokerworkbenchdev2qdxa3smrnc7a.azurecr.io/broker-frontend:v6'
+param backendContainerImage = 'acrbrokerworkbenchdev2qdxa3smrnc7a.azurecr.io/broker-backend:gpt5-fix'
 param mcpContainerImage = 'acrbrokerworkbenchdev2qdxa3smrnc7a.azurecr.io/broker-mcp:handoff-df3691d'
 
 // Additional MCAPS-required tags (cost center, business owner, data classification, etc.)
