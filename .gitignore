@@ -50,6 +50,9 @@ tests/e2e/node_modules/
 tests/e2e/test-results/
 tests/e2e/playwright-report/
 tests/e2e/playwright/.cache/
+qa_*.txt
+qa_*.log
+smoke_*.log
 
 # Azure dev artifacts
 .azure/

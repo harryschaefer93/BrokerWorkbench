@@ -31,6 +31,54 @@ from services.renewal_tracker import (
 # Tool Functions - These wrap existing services for agent use
 # =============================================================================
 
+_CLIENT_ID_KEYS = ("client_id", "clientId", "id")
+_POLICY_ID_KEYS = ("policy_id", "policyId")
+
+
+def _normalize_client_id(raw: Any) -> Any:
+    """Map common LLM-emitted client ID variants to canonical CLI### form.
+
+    Accepts CLT-001, CLI-001, CLIENT001, cli001, etc. Canonical is CLI001.
+    Returns the input unchanged if it doesn't look like a client ID.
+    """
+    if not isinstance(raw, str):
+        return raw
+    s = raw.strip().upper().replace("-", "").replace("_", "").replace(" ", "")
+    if s.startswith("CLIENT"):
+        s = "CLI" + s[6:]
+    elif s.startswith("CLT"):
+        s = "CLI" + s[3:]
+    elif s.startswith("C") and not s.startswith("CLI") and s[1:].isdigit():
+        s = "CLI" + s[1:]
+    return s
+
+
+def _normalize_policy_id(raw: Any) -> Any:
+    """Map common LLM-emitted policy ID variants to canonical POL### form."""
+    if not isinstance(raw, str):
+        return raw
+    s = raw.strip().upper().replace("-", "").replace("_", "").replace(" ", "")
+    if s.startswith("POLICY"):
+        s = "POL" + s[6:]
+    elif s.startswith("P") and not s.startswith("POL") and s[1:].isdigit():
+        s = "POL" + s[1:]
+    return s
+
+
+def _normalize_id_args(arguments: Dict[str, Any]) -> Dict[str, Any]:
+    """Apply ID normalization to known keys before tool dispatch."""
+    if not isinstance(arguments, dict):
+        return arguments
+    out = dict(arguments)
+    for k in _CLIENT_ID_KEYS:
+        if k in out:
+            out[k] = _normalize_client_id(out[k])
+    for k in _POLICY_ID_KEYS:
+        if k in out:
+            out[k] = _normalize_policy_id(out[k])
+    return out
+
+
 def get_client_info(client_id: str) -> Dict[str, Any]:
     """
     Get detailed information about a specific client.
@@ -927,7 +975,8 @@ def execute_tool(tool_name: str, arguments: Dict[str, Any]) -> str:
         return json.dumps({"error": f"Unknown tool: {tool_name}"})
     
     try:
-        result = TOOL_FUNCTIONS[tool_name](**arguments)
+        normalized = _normalize_id_args(arguments)
+        result = TOOL_FUNCTIONS[tool_name](**normalized)
         return json.dumps(result, default=str)
     except Exception as e:
         return json.dumps({"error": str(e)})
