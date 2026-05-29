@@ -103,21 +103,43 @@ async def mcp_ping() -> dict[str, Any]:
 # SQL Server-specific ODBC option for passing an AAD access token to the driver.
 _SQL_COPT_SS_ACCESS_TOKEN = 1256
 
+# MCP container app's user-assigned managed identity. Hard-coded so this
+# one-shot endpoint does not need to call Graph (which the SQL server itself
+# cannot reach in this environment — see the "SSL connection could not be
+# established" error when CREATE USER ... FROM EXTERNAL PROVIDER tries to
+# resolve the name via the SQL-server-side Graph lookup).
+_MCP_MI_NAME = "id-mcp-brokerworkbench-dev"
+_MCP_MI_OBJECT_ID = "ffa97d21-7d17-4451-82e7-30c96856dc70"
+
+
+def _aad_object_id_to_sql_sid(object_id: str) -> str:
+    """Convert an AAD object ID (GUID) into the binary SID hex string that
+    Azure SQL expects for `CREATE USER ... WITH TYPE=E, SID=0x...`.
+
+    Azure SQL stores the AAD object ID as a 16-byte SID in mixed-endian form:
+    the first three GUID groups are byte-reversed, the last two are big-endian.
+    """
+    import uuid
+
+    u = uuid.UUID(object_id)
+    return "0x" + u.bytes_le.hex().upper()
+
+
 _GRANT_SQL_STATEMENTS = [
     (
-        "CREATE USER [id-mcp-brokerworkbench-dev] FROM EXTERNAL PROVIDER",
+        f"CREATE USER [{_MCP_MI_NAME}] WITH TYPE = E, SID = {{SID}}, DEFAULT_SCHEMA = dbo",
         "create_user",
     ),
     (
-        "ALTER ROLE db_datareader ADD MEMBER [id-mcp-brokerworkbench-dev]",
+        f"ALTER ROLE db_datareader ADD MEMBER [{_MCP_MI_NAME}]",
         "add_datareader",
     ),
     (
-        "GRANT SELECT ON SCHEMA::master_data TO [id-mcp-brokerworkbench-dev]",
+        f"GRANT SELECT ON SCHEMA::master_data TO [{_MCP_MI_NAME}]",
         "grant_master_data",
     ),
     (
-        "GRANT SELECT ON SCHEMA::txn TO [id-mcp-brokerworkbench-dev]",
+        f"GRANT SELECT ON SCHEMA::txn TO [{_MCP_MI_NAME}]",
         "grant_txn",
     ),
 ]
@@ -181,13 +203,15 @@ async def grant_mcp_sql(
     statements: list[dict[str, Any]] = []
     connect_ok = False
     overall_ok = True
+    sid_hex = _aad_object_id_to_sql_sid(_MCP_MI_OBJECT_ID)
     try:
         # pyodbc connect is sync; this endpoint is rare so we run inline.
         conn = pyodbc.connect(dsn, attrs_before={_SQL_COPT_SS_ACCESS_TOKEN: token_struct})
         connect_ok = True
         conn.autocommit = True
         cursor = conn.cursor()
-        for sql, key in _GRANT_SQL_STATEMENTS:
+        for sql_template, key in _GRANT_SQL_STATEMENTS:
+            sql = sql_template.replace("{SID}", sid_hex)
             try:
                 cursor.execute(sql)
                 statements.append({"key": key, "ok": True})
