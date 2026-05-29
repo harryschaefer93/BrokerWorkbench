@@ -35,7 +35,7 @@ DEFAULT_PROMPT = "Show CLI001 claims history"
 async def _run(prompt: str) -> int:
     from .handoff import build_handoff
 
-    workflow, mcp_tool = await build_handoff()
+    workflow, mcp_tool, _tool_queue = await build_handoff()
     logger.info("Streaming workflow events for prompt: %r", prompt)
 
     async with mcp_tool:

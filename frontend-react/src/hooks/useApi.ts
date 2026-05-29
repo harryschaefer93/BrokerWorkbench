@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import type {
   Policy,
   Client,
@@ -6,9 +6,27 @@ import type {
   RenewalDashboard,
   ChatMessage,
   DashboardMetrics,
+  ToolCall,
 } from "@/types";
 
 const API_BASE = "/api";
+const CONV_ID_KEY = "bw-conv-id";
+
+function getOrCreateConversationId(): string {
+  if (typeof window === "undefined") return "";
+  try {
+    const existing = window.localStorage.getItem(CONV_ID_KEY);
+    if (existing) return existing;
+    const fresh =
+      typeof crypto !== "undefined" && "randomUUID" in crypto
+        ? crypto.randomUUID()
+        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    window.localStorage.setItem(CONV_ID_KEY, fresh);
+    return fresh;
+  } catch {
+    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  }
+}
 
 // Generic fetch hook
 function useFetch<T>(url: string, initialData: T) {
@@ -116,13 +134,14 @@ export function useChat() {
   const [isLoading, setIsLoading] = useState(false);
   const [isStreaming, setIsStreaming] = useState(false);
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
+  const conversationId = useMemo(() => getOrCreateConversationId(), []);
 
   const sendMessage = useCallback(
     async (
       content: string,
       agentType: "claims" | "crosssell" | "quote" | "triage" = "triage",
       history?: { role: "user" | "assistant"; content: string }[],
-      useHandoff: boolean = false,
+      useHandoff: boolean = true,
     ) => {
       const userMessage: ChatMessage = {
         id: Date.now().toString(),
@@ -151,9 +170,15 @@ export function useChat() {
         const endpoint = useHandoff
           ? `${API_BASE}/agent/chat/handoff/stream`
           : `${API_BASE}/agent/chat/stream`;
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+        };
+        if (useHandoff && conversationId) {
+          headers["X-Conversation-Id"] = conversationId;
+        }
         const response = await fetch(endpoint, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers,
           body: JSON.stringify({ message: content, agent: agentType, history: history || [] }),
         });
 
@@ -183,14 +208,56 @@ export function useChat() {
             const raw = line.slice(6).trim();
             if (!raw) continue;
 
-            let event: { type: string; content?: string; agent?: string; suggestions?: string[] };
+            let event: {
+              type: string;
+              content?: string;
+              agent?: string;
+              suggestions?: string[];
+              name?: string;
+              arguments?: Record<string, unknown>;
+              call_id?: string;
+              ok?: boolean;
+              summary?: string;
+            };
             try {
               event = JSON.parse(raw);
             } catch {
               continue; // skip malformed event
             }
 
-            if (event.type === "routing") {
+            if (event.type === "tool_call") {
+              const callId = event.call_id ?? `${Date.now()}`;
+              const newCall: ToolCall = {
+                id: callId,
+                name: event.name ?? "tool",
+                arguments: event.arguments ?? {},
+                status: "pending",
+              };
+              setMessages((prev) =>
+                prev.map((m) =>
+                  m.id === assistantId
+                    ? { ...m, toolCalls: [...(m.toolCalls ?? []), newCall] }
+                    : m,
+                ),
+              );
+            } else if (event.type === "tool_result") {
+              const callId = event.call_id;
+              const nextStatus: ToolCall["status"] = event.ok ? "ok" : "error";
+              const nextSummary = event.summary;
+              setMessages((prev) =>
+                prev.map((m) => {
+                  if (m.id !== assistantId || !m.toolCalls?.length) return m;
+                  return {
+                    ...m,
+                    toolCalls: m.toolCalls.map((tc) =>
+                      tc.id === callId
+                        ? { ...tc, status: nextStatus, summary: nextSummary }
+                        : tc,
+                    ),
+                  };
+                }),
+              );
+            } else if (event.type === "routing") {
               // Triage resolved to a specialist — update agent avatar immediately
               const agentNameMap: Record<string, string> = {
                 ClaimsImpactAgent: "claims",
@@ -269,7 +336,7 @@ export function useChat() {
         setIsStreaming(false);
       }
     },
-    [],
+    [conversationId],
   );
 
   const clearMessages = useCallback(() => {

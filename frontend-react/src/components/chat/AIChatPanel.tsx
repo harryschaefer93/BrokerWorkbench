@@ -4,6 +4,7 @@ import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button, Input, ScrollArea } from "@/components/ui";
 import { useChat } from "@/hooks";
+import type { ToolCall } from "@/types";
 import {
   Send,
   RefreshCw,
@@ -17,6 +18,10 @@ import {
   TrendingUp,
   Shield,
   FileText,
+  Wrench,
+  CheckCircle2,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -348,10 +353,81 @@ interface ChatMessageProps {
     timestamp: Date;
     agentType?: string;
     suggestions?: string[];
+    toolCalls?: ToolCall[];
   };
   onSuggestionClick?: (suggestion: string) => void;
   isClearing?: boolean;
   isStreaming?: boolean;
+}
+
+function ToolPill({ tool }: { tool: ToolCall }) {
+  const [open, setOpen] = useState(false);
+  const isPending = tool.status === "pending";
+  const isOk = tool.status === "ok";
+  const isError = tool.status === "error";
+
+  const Icon = isOk ? CheckCircle2 : isError ? XCircle : Wrench;
+
+  const palette = isOk
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800"
+    : isError
+      ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800"
+      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700";
+
+  let argsJson = "";
+  try {
+    argsJson = JSON.stringify(tool.arguments ?? {}, null, 2);
+  } catch {
+    argsJson = "<unserializable arguments>";
+  }
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.15 }}
+      className="inline-flex flex-col"
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-mono transition-colors",
+          palette,
+        )}
+        title={tool.summary || tool.name}
+      >
+        {isPending ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Icon className="h-3 w-3" />
+        )}
+        <span className="truncate max-w-[10rem]">{tool.name}</span>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden mt-1"
+          >
+            <div className="rounded-md border border-border/60 bg-background/80 px-2 py-1.5 text-[10px] space-y-1 max-w-xs">
+              {tool.summary && (
+                <div className="text-muted-foreground">{tool.summary}</div>
+              )}
+              <pre className="whitespace-pre-wrap break-words font-mono text-[10px] text-foreground/80 leading-snug max-h-40 overflow-auto">
+                {argsJson}
+              </pre>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
 }
 
 function ChatMessage({
@@ -437,6 +513,17 @@ function ChatMessage({
           )}
         </div>
 
+        {/* Tool pills */}
+        {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <AnimatePresence initial={false}>
+              {message.toolCalls.map((tc) => (
+                <ToolPill key={tc.id} tool={tc} />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
+
         {/* Follow-up suggestions */}
         {message.suggestions && message.suggestions.length > 0 && (
           <div className="mt-3 pt-2 border-t border-dashed border-border/50">
@@ -484,10 +571,6 @@ export function AIChatPanel({
   const [isResizing, setIsResizing] = useState(false);
   const [inputValue, setInputValue] = useState("");
   const [isClearing, setIsClearing] = useState(false);
-  // Hidden-by-default preview switch: route through the Agent Framework
-  // HandoffBuilder workflow instead of the legacy per-agent streaming
-  // endpoint. Same SSE contract on the wire.
-  const [useHandoff, setUseHandoff] = useState(false);
 
   const {
     messages,
@@ -549,7 +632,7 @@ export function AIChatPanel({
       .map((m) => ({ role: m.role as "user" | "assistant", content: m.content }));
 
     // Always route through triage agent for LLM-based classification
-    sendMessage(inputValue, "triage", history, useHandoff);
+    sendMessage(inputValue, "triage", history);
     setInputValue("");
   };
 
@@ -627,18 +710,6 @@ export function AIChatPanel({
             Clear
           </Button>
         </div>
-
-        {/* Preview: route through Agent Framework HandoffBuilder workflow.
-            Off by default. Same SSE contract — UI behaves identically. */}
-        <label className="flex items-center gap-1.5 text-[10px] text-muted-foreground mb-2 cursor-pointer select-none">
-          <input
-            type="checkbox"
-            checked={useHandoff}
-            onChange={(e) => setUseHandoff(e.target.checked)}
-            className="h-3 w-3 cursor-pointer"
-          />
-          Use handoff orchestration (preview)
-        </label>
 
         {/* Messages */}
         <ScrollArea ref={scrollRef} className="flex-1 pr-2 -mr-2">
