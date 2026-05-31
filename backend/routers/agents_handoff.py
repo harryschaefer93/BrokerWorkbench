@@ -368,11 +368,21 @@ _HOSTED_TIMEOUT_SECONDS = 120
 async def _stream_hosted(request: ChatRequest, conversation_id: str):
     """Proxy a turn to the Hosted-agent Responses endpoint and adapt SSE.
 
-    Maps the Foundry ``response.output_text.delta`` events to our ``token``
-    frames, and the terminal ``response.completed`` to our ``done`` frame.
-    Handoff/tool events are surfaced as ``status`` frames when the platform
-    emits them — full ``tool_call``/``tool_result`` fidelity from the hosted
-    side is a follow-up (B3 over hosted).
+    Maps the Foundry OpenAI Responses event vocabulary to our 5+2-frame
+    contract. Verified event types from sc-v5 hosted agent:
+        response.created / .in_progress / .completed
+        response.output_item.added / .done  (reasoning | function_call | message)
+        response.output_text.delta / .done
+        response.function_call_arguments.delta / .done
+        response.reasoning_summary_* (ignored)
+        response.content_part.added / .done
+
+    Routing surfaces as ``function_call`` items whose name starts with
+    ``handoff_to_`` (Agent Framework convention). Regular tool calls are
+    function_call items with their MCP tool name. Foundry does NOT emit
+    public tool RESULT events \u2014 we synthesize an ``ok`` ``tool_result``
+    frame when the call's status transitions to ``completed`` (function
+    succeeded; on error the platform raises out of the stream instead).
     """
     import httpx
     from azure.identity.aio import (
@@ -401,21 +411,23 @@ async def _stream_hosted(request: ChatRequest, conversation_id: str):
         ManagedIdentityCredential(client_id=client_id),
         AzureCliCredential(),
     )
-    # Foundry Responses endpoint accepts Entra tokens for the AI scope.
     token = await credential.get_token("https://ai.azure.com/.default")
 
-    last_speaker: str | None = None
+    last_speaker = "Triage"
     final_text: list[str] = []
+    # call_id -> {name, arguments_chunks: list[str], is_handoff: bool}
+    pending_calls: dict[str, dict[str, Any]] = {}
     body = {
         "input": _build_prompt(request.message, request.history),
         "stream": True,
-        # Hosting platform manages history; we don't need to store on its side
-        # because we're a thin proxy that already replays history above.
+        # Platform manages history; we replayed it already in the prompt.
         "store": False,
     }
 
     try:
-        async with httpx.AsyncClient(timeout=_HOSTED_TIMEOUT_SECONDS) as client:
+        async with httpx.AsyncClient(
+            timeout=httpx.Timeout(_HOSTED_TIMEOUT_SECONDS, read=_HOSTED_TIMEOUT_SECONDS)
+        ) as client:
             async with client.stream(
                 "POST",
                 endpoint,
@@ -438,47 +450,112 @@ async def _stream_hosted(request: ChatRequest, conversation_id: str):
                     except json.JSONDecodeError:
                         continue
                     etype = event.get("type", "")
-                    # Token deltas.
-                    if etype.endswith("output_text.delta"):
+
+                    # 1. Token deltas \u2014 the visible answer.
+                    if etype == "response.output_text.delta":
                         delta = event.get("delta") or ""
                         if delta:
                             final_text.append(delta)
                             yield _frame({"type": "token", "content": delta})
                         continue
-                    # Routing / executor transitions surface as workflow
-                    # events on the hosted side. Best-effort surface.
-                    exec_id = (
-                        event.get("executor_id")
-                        or event.get("agent")
-                        or (event.get("data") or {}).get("executor_id")
-                    )
-                    if exec_id and exec_id != last_speaker:
-                        last_speaker = exec_id
-                        mapped = _AGENT_NAME_MAP.get(exec_id, exec_id)
+
+                    # 2. New output item arrives \u2014 detect function_call.
+                    if etype == "response.output_item.added":
+                        item = event.get("item") or {}
+                        if item.get("type") != "function_call":
+                            continue
+                        call_id = item.get("call_id") or item.get("id") or ""
+                        name = item.get("name") or ""
+                        is_handoff = name.startswith("handoff_to_")
+                        pending_calls[call_id] = {
+                            "name": name,
+                            "args_chunks": [],
+                            "is_handoff": is_handoff,
+                        }
+                        if is_handoff:
+                            target = name[len("handoff_to_"):]
+                            last_speaker = target
+                            mapped = _AGENT_NAME_MAP.get(target, target)
+                            log.info("hosted routing to=%s", target)
+                            yield _frame(
+                                {
+                                    "type": "routing",
+                                    "agent": mapped,
+                                    "content": f"Routing to {target}\u2026",
+                                }
+                            )
+                        else:
+                            # Real MCP tool call \u2014 emit start frame.
+                            yield _frame(
+                                {
+                                    "type": "tool_call",
+                                    "name": name,
+                                    "arguments": {},  # filled progressively
+                                    "call_id": call_id,
+                                }
+                            )
+                        continue
+
+                    # 3. Accumulate function_call argument chunks.
+                    if etype == "response.function_call_arguments.delta":
+                        call_id = event.get("item_id") or event.get("call_id") or ""
+                        delta = event.get("delta") or ""
+                        if call_id in pending_calls and delta:
+                            pending_calls[call_id]["args_chunks"].append(delta)
+                        continue
+
+                    # 4. function_call complete \u2014 synthesize tool_result.
+                    if etype == "response.output_item.done":
+                        item = event.get("item") or {}
+                        if item.get("type") != "function_call":
+                            continue
+                        call_id = item.get("call_id") or item.get("id") or ""
+                        info = pending_calls.pop(call_id, None)
+                        if not info or info["is_handoff"]:
+                            # Handoffs don't get tool_result frames in our contract.
+                            continue
+                        # Foundry tells us the final arguments string on the
+                        # .done item; prefer that over our chunked accumulation
+                        # for accuracy.
+                        args_str = (
+                            item.get("arguments")
+                            or "".join(info["args_chunks"])
+                            or "{}"
+                        )
+                        try:
+                            args_parsed = json.loads(args_str) if args_str else {}
+                        except json.JSONDecodeError:
+                            args_parsed = {"_raw": args_str}
+                        status = item.get("status", "completed")
+                        ok = status == "completed"
                         yield _frame(
                             {
-                                "type": "routing",
-                                "agent": mapped,
-                                "content": f"Routing to {exec_id}…",
+                                "type": "tool_result",
+                                "call_id": call_id,
+                                "ok": ok,
+                                "summary": json.dumps(args_parsed)[:160],
                             }
                         )
-                    if etype.endswith(".completed") or etype == "response.completed":
-                        # Some platform builds include a final consolidated
-                        # output_text under .response.output[0].content[*].text.
+                        continue
+
+                    # 5. Terminal events \u2014 capture final text if we missed
+                    # streaming (e.g. background mode buffered everything).
+                    if etype == "response.completed":
                         if not final_text:
                             try:
                                 outputs = (
-                                    event.get("response", {})
-                                    .get("output", [])
+                                    event.get("response", {}).get("output", [])
                                 )
                                 for o in outputs:
-                                    for c in o.get("content", []):
+                                    for c in o.get("content", []) or []:
                                         if c.get("type") == "output_text":
                                             final_text.append(c.get("text", ""))
                             except Exception:  # noqa: BLE001
                                 pass
                         break
-                    if etype == "error" or "error" in etype:
+
+                    # 6. Errors.
+                    if etype == "error" or etype.endswith(".failed"):
                         yield _frame(
                             {
                                 "type": "error",
@@ -500,6 +577,6 @@ async def _stream_hosted(request: ChatRequest, conversation_id: str):
         except Exception:  # noqa: BLE001
             pass
 
-    final_agent = _AGENT_NAME_MAP.get(last_speaker or "Triage", "BrokerAgent")
+    final_agent = _AGENT_NAME_MAP.get(last_speaker, "BrokerAgent")
     log.info("hosted proxy done final_agent=%s", final_agent)
     yield _frame({"type": "done", "agent": final_agent, "suggestions": []})

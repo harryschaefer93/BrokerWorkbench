@@ -389,6 +389,9 @@ function ToolPill({ tool }: { tool: ToolCall }) {
       exit={{ opacity: 0, y: -4 }}
       transition={{ duration: 0.15 }}
       className="inline-flex flex-col"
+      data-testid="tool-pill"
+      data-tool-name={tool.name}
+      data-tool-status={tool.status}
     >
       <button
         type="button"
@@ -449,6 +452,9 @@ function ChatMessage({
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.2 }}
       className={cn("flex gap-2", isUser && "flex-row-reverse")}
+      data-testid={`chat-message-${isUser ? "user" : "assistant"}`}
+      data-streaming={isStreaming ? "true" : "false"}
+      data-agent={message.agentType ?? ""}
     >
       <div
         className={cn(
@@ -515,7 +521,7 @@ function ChatMessage({
 
         {/* Tool pills */}
         {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="mt-2 flex flex-wrap gap-1.5">
+          <div className="mt-2 flex flex-wrap gap-1.5" data-testid="tool-pills">
             <AnimatePresence initial={false}>
               {message.toolCalls.map((tc) => (
                 <ToolPill key={tc.id} tool={tc} />
@@ -669,6 +675,7 @@ export function AIChatPanel({
 
   return (
     <aside
+      data-testid="chat-panel"
       className="border-l bg-card h-[calc(100vh-4rem)] flex flex-col relative"
       style={{ width }}
     >
@@ -765,6 +772,7 @@ export function AIChatPanel({
         <div className="mt-4 space-y-3">
           <div className="flex gap-2">
             <Input
+              data-testid="chat-input"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -772,6 +780,7 @@ export function AIChatPanel({
               className="flex-1 rounded-full text-sm"
             />
             <Button
+              data-testid="chat-send"
               onClick={handleSend}
               disabled={!inputValue.trim() || isLoading}
               className="rounded-full px-4"
@@ -781,12 +790,13 @@ export function AIChatPanel({
           </div>
 
           {/* Prompt Suggestions */}
-          <div className="flex flex-wrap gap-1.5 pt-2 border-t">
+          <div className="flex flex-wrap gap-1.5 pt-2 border-t" data-testid="prompt-suggestions">
             {promptSuggestions.map((suggestion) => {
               const Icon = suggestion.icon;
               return (
                 <button
                   key={suggestion.label}
+                  data-testid={`prompt-suggestion-${suggestion.label.toLowerCase().replace(/\s+/g, '-')}`}
                   onClick={() => handlePromptClick(suggestion.prompt)}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-muted hover:bg-primary hover:text-primary-foreground transition-colors"
                 >

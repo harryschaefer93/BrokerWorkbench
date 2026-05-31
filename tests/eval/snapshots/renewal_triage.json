@@ -1,0 +1,30 @@
+{
+  "answer": "Here are the top 3 critical renewals by priority score:\n\n| Policy | Client | Policy Type | Carrier | Expiration | Days | Premium | Priority |\n|---|---|---|---|---|---:|---:|---:|\n| POL-2026-00035 (POL035) | Lakeside Dental Partners | General Liability | CNA | 2026-06-01 | 1 | $11,715.60 | 49.5 |\n| POL-2026-00047 (POL047) | Pioneer Freight | Workers\u2019 Comp | Zurich | 2026-06-02 | 2 | $11,431.25 | 49.0 |\n| POL-2026-00007 (POL007) | Riverstone Apparel | Workers\u2019 Comp | Zurich | 2026-06-04 | 4 | $11,870.00 | 48.0 |\n\nWant me to pull full policy details on any of these or kick off marketing for alternative quotes?Here are the top 3 critical renewals by priority score:\n\n| Policy | Client | Policy Type | Carrier | Expiration | Days | Premium | Priority |\n|---|---|---|---|---|---:|---:|---:|\n| POL-2026-00035 (POL035) | Lakeside Dental Partners | General Liability | CNA | 2026-06-01 | 1 | $11,715.60 | 49.5 |\n| POL-2026-00047 (POL047) | Pioneer Freight | Workers\u2019 Comp | Zurich | 2026-06-02 | 2 | $11,431.25 | 49.0 |\n| POL-2026-00007 (POL007) | Riverstone Apparel | Workers\u2019 Comp | Zurich | 2026-06-04 | 4 | $11,870.00 | 48.0 |\n\nWant me to pull full policy details on any of these or kick off marketing for alternative quotes?",
+  "backend": "https://ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io",
+  "expected_agent": null,
+  "expected_keywords": [
+    "critical",
+    "renewal",
+    "expir",
+    "priority"
+  ],
+  "expected_tools": [
+    "get_renewals_by_urgency"
+  ],
+  "final_agent_short": "Quote",
+  "first_token_s": 51.9,
+  "id": "renewal_triage",
+  "prompt": "Show me the top 3 critical renewals coming up",
+  "routed_to": [
+    "QuoteComparisonAgent"
+  ],
+  "tool_calls": [
+    "get_renewals_by_urgency",
+    "get_policy_details",
+    "get_policy_details",
+    "get_policy_details",
+    "get_renewals_by_urgency",
+    "request_info"
+  ],
+  "total_s": 62.69
+}

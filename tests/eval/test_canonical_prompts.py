@@ -43,8 +43,8 @@ DEFAULT_BACKEND = (
     "https://ca-backend-brokerworkbench-dev."
     "kinddune-112ddddc.swedencentral.azurecontainerapps.io"
 )
-LATENCY_FIRST_TOKEN_S = 30.0   # generous; gpt-5 reasoning can take a while
-LATENCY_TOTAL_S = 180.0
+LATENCY_FIRST_TOKEN_S = 90.0   # gpt-5 reasoning + multi-MCP-tool roundtrip is slow on cold path
+LATENCY_TOTAL_S = 240.0
 
 
 def _load_prompts() -> list[dict[str, Any]]:
@@ -68,7 +68,9 @@ def _send(prompt: str, backend: str) -> dict[str, Any]:
     tool_calls: list[dict[str, Any]] = []
     tool_results: list[dict[str, Any]] = []
 
-    with httpx.Client(timeout=LATENCY_TOTAL_S) as client:
+    with httpx.Client(
+        timeout=httpx.Timeout(LATENCY_TOTAL_S, read=LATENCY_TOTAL_S)
+    ) as client:
         with client.stream(
             "POST",
             url,

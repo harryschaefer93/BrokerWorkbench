@@ -1,0 +1,32 @@
+{
+  "answer": "Pulling Riverbend Family Practice (CLI011) details and current policies now. Here\u2019s the market check for Cyber Liability at $5M limit for Healthcare:\n\n| Carrier | AM Best | Est. Annual Premium | Base Rate per $1M | Quote Time | API Enabled |\n|---|---|---:|---:|---:|---|\n| Chubb | A++ | $13,234.84 | $1,939.17 | 2 hrs | Yes |\n| AIG | A | $13,247.58 | $2,038.09 | 2 hrs | Yes |\n\nNotes:\n- Current expiring Chubb cyber premium on file: $8,871 for $5M limit, $5k deductible (expires today).\n\nRecommendation: Renew with Chubb if they\u2019ll hold near current expiring terms\u2014best rating and relationship, and their estimate edges AIG. If Chubb comes in materially above, keep AIG as a leverage option; pricing is essentially a tie.\n\nCoverage gaps to flag: Professional Liability/Medical Malpractice (high priority for healthcare) and Workers\u2019 Comp (medium priority) are not on file.",
+  "backend": "https://ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io",
+  "expected_agent": "Quote",
+  "expected_keywords": [
+    "carrier",
+    "premium",
+    "rating"
+  ],
+  "expected_tools": [
+    "compare_carrier_rates",
+    "get_carriers_for_policy_type"
+  ],
+  "final_agent_short": "Quote",
+  "first_token_s": 71.35,
+  "id": "quote_compare",
+  "prompt": "Compare carrier rates for cyber liability for client CLI011 (assume $5M coverage limit)",
+  "routed_to": [
+    "QuoteComparisonAgent"
+  ],
+  "tool_calls": [
+    "get_client_info",
+    "compare_carrier_rates",
+    "compare_carrier_rates",
+    "get_client_info",
+    "get_client_policies",
+    "compare_carrier_rates",
+    "get_coverage_gaps",
+    "request_info"
+  ],
+  "total_s": 74.49
+}
