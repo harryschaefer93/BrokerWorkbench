@@ -27,14 +27,16 @@ WORKDIR /app
 COPY backend/agents/foundry/hosted/requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
-# Copy the foundry workflow code (handoff + specialists + chat_client + config)
-# and just enough of the backend tree to satisfy imports.
+# Copy the foundry workflow code (handoff + specialists + chat_client + config).
+# We mount it under /app/backend/agents/ to preserve the existing
+# `from agents.config import ...` and `from .specialists import ...` imports.
+# A synthesized empty backend/__init__.py turns the tree into a real package.
 COPY backend/agents /app/backend/agents
-COPY backend/__init__.py /app/backend/__init__.py
+RUN touch /app/backend/__init__.py
 
-ENV PYTHONPATH=/app
+ENV PYTHONPATH=/app:/app/backend
 
 # Hosted agents serve on 8088.
 EXPOSE 8088
 
-CMD ["python", "-m", "backend.agents.foundry.hosted.main"]
+CMD ["python", "/app/backend/agents/foundry/hosted/main.py"]

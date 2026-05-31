@@ -36,15 +36,16 @@ logger = logging.getLogger(__name__)
 def _build_chat_client():
     """Construct the Azure OpenAI chat client the workflow's specialists share."""
     # Re-use the existing factory so local and hosted both go through the
-    # same code path (one less drift surface).
-    from backend.agents.foundry.chat_client import build_chat_client
+    # same code path (one less drift surface). PYTHONPATH includes both
+    # /app and /app/backend so `agents.foundry.chat_client` resolves.
+    from agents.foundry.chat_client import build_chat_client
 
     return build_chat_client()
 
 
 async def _build_workflow_agent():
     """Build the handoff workflow and wrap it as an Agent Framework agent."""
-    from backend.agents.foundry.handoff import build_handoff
+    from agents.foundry.handoff import build_handoff
 
     chat_client = _build_chat_client()
     workflow, mcp_tool, _tool_queue = await build_handoff(chat_client=chat_client)
