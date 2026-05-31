@@ -3,7 +3,7 @@ canonical prompt, plus dir(mcp_tool) to find the tool-invocation hook.
 
 Run inside the backend container (which has env wiring + internal MCP access):
 
-    az containerapp exec -g rg-bwbench-demo -n ca-backend-brokerworkbench-dev \
+    az containerapp exec -g rg-bwbench-sc -n ca-backend-brokerworkbench-dev \
         --command "python -m agents.foundry.probe_events"
 """
 from __future__ import annotations

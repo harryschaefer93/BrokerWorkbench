@@ -9,7 +9,7 @@ socket.getaddrinfo = lambda *a, **k: [r for r in _orig(*a, **k) if r[0] == socke
 from azure.identity import AzureCliCredential  # noqa: E402
 import requests  # noqa: E402
 
-ACR = sys.argv[1] if len(sys.argv) > 1 else "acrbrokerworkbenchdev2qdxa3smrnc7a"
+ACR = sys.argv[1] if len(sys.argv) > 1 else "acrbrokerworkbenchdevwnwtqzj2xcdts"
 REPO = sys.argv[2] if len(sys.argv) > 2 else "brokerworkbench-backend"
 TARGET = sys.argv[3] if len(sys.argv) > 3 else "backend-handoff-df3691d"
 TENANT = "44e26be6-f73b-4438-8335-205b417d5b4d"

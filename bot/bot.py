@@ -5,14 +5,15 @@ Receives messages from Teams, forwards them to the BrokerWorkbench backend,
 and returns polished Adaptive Cards.
 """
 
+import asyncio
 from collections import defaultdict
 from typing import Any
 import json
 
 import httpx
-from botbuilder.core import CardFactory, MessageFactory, TurnContext
+from botbuilder.core import BotAdapter, CardFactory, MessageFactory, TurnContext
 from botbuilder.core.teams import TeamsActivityHandler
-from botbuilder.schema import Attachment, ChannelAccount
+from botbuilder.schema import Activity, ActivityTypes, Attachment, ChannelAccount
 
 from card_formatter import CardFormatter
 from config import Settings
@@ -24,10 +25,12 @@ _MAX_HISTORY = 10
 class BrokerBot(TeamsActivityHandler):
     """Teams bot that proxies to the BrokerWorkbench backend."""
 
-    def __init__(self, settings: Settings):
+    def __init__(self, settings: Settings, adapter: BotAdapter | None = None):
         super().__init__()
         self.backend_url = settings.backend_url.rstrip("/")
         self.formatter = CardFormatter()
+        self.adapter = adapter
+        self.bot_app_id = settings.microsoft_app_id
         # In-memory conversation history: {conversation_id: [{"role":..., "content":...}]}
         self._history: dict[str, list[dict[str, str]]] = defaultdict(list)
 
@@ -60,30 +63,80 @@ class BrokerBot(TeamsActivityHandler):
             return
 
         conv_id = turn_context.activity.conversation.id
-        history = self._history[conv_id]
 
+        # Send a typing indicator immediately so the user sees activity while
+        # the Foundry agent works (these calls can take 10–30s).
+        try:
+            await turn_context.send_activity(Activity(type=ActivityTypes.typing))
+        except Exception:
+            pass  # typing is best-effort; never fail the turn over it
+
+        # If we have an adapter (production path), do the slow work in a
+        # background task and reply proactively. Otherwise (tests/dev fallback)
+        # run inline and reply in the same turn.
+        if self.adapter is not None:
+            reference = TurnContext.get_conversation_reference(turn_context.activity)
+            asyncio.create_task(self._process_in_background(reference, text, conv_id))
+        else:
+            await self._handle_and_reply(turn_context, text, conv_id)
+
+    async def _handle_and_reply(
+        self, turn_context: TurnContext, text: str, conv_id: str
+    ) -> None:
+        """Inline path: call backend and reply on the same turn."""
+        history = self._history[conv_id]
         try:
             agent_name, response_text = await self._call_backend(text, history)
-
-            # Update history
-            history.append({"role": "user", "content": text})
-            history.append({"role": "assistant", "content": response_text})
-            # Trim to max turns (each turn = 2 entries)
-            if len(history) > _MAX_HISTORY * 2:
-                self._history[conv_id] = history[-_MAX_HISTORY * 2:]
-
-            # Build and send Adaptive Card
+            self._append_history(conv_id, text, response_text)
             suggestions = self._pick_suggestions(text, agent_name)
             card_payload = self.formatter.format_response(
                 response_text, agent_name, suggestions=suggestions
             )
-            attachment = self._make_attachment(card_payload)
-            await turn_context.send_activity(MessageFactory.attachment(attachment))
-
+            await turn_context.send_activity(
+                MessageFactory.attachment(self._make_attachment(card_payload))
+            )
         except Exception as exc:
             card_payload = self.formatter.format_error_card(str(exc))
-            attachment = self._make_attachment(card_payload)
-            await turn_context.send_activity(MessageFactory.attachment(attachment))
+            await turn_context.send_activity(
+                MessageFactory.attachment(self._make_attachment(card_payload))
+            )
+
+    async def _process_in_background(
+        self, reference, text: str, conv_id: str
+    ) -> None:
+        """Proactive path: call backend then send result via continue_conversation."""
+        history = self._history[conv_id]
+
+        async def _callback(ctx: TurnContext) -> None:
+            try:
+                agent_name, response_text = await self._call_backend(text, history)
+                self._append_history(conv_id, text, response_text)
+                suggestions = self._pick_suggestions(text, agent_name)
+                card_payload = self.formatter.format_response(
+                    response_text, agent_name, suggestions=suggestions
+                )
+                await ctx.send_activity(
+                    MessageFactory.attachment(self._make_attachment(card_payload))
+                )
+            except Exception as inner_exc:
+                err_card = self.formatter.format_error_card(str(inner_exc))
+                await ctx.send_activity(
+                    MessageFactory.attachment(self._make_attachment(err_card))
+                )
+
+        try:
+            await self.adapter.continue_conversation(
+                reference, _callback, bot_app_id=self.bot_app_id
+            )
+        except Exception as exc:  # pragma: no cover - logged for ops
+            print(f"[continue_conversation] failed: {exc}", flush=True)
+
+    def _append_history(self, conv_id: str, user_text: str, assistant_text: str) -> None:
+        history = self._history[conv_id]
+        history.append({"role": "user", "content": user_text})
+        history.append({"role": "assistant", "content": assistant_text})
+        if len(history) > _MAX_HISTORY * 2:
+            self._history[conv_id] = history[-_MAX_HISTORY * 2:]
 
     async def on_members_added_activity(
         self, members_added: list[ChannelAccount], turn_context: TurnContext

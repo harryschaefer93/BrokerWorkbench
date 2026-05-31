@@ -10,7 +10,7 @@ For each canonical Field Day prompt:
      quality)
 
 Run:
-  $env:BROKER_DIRECTLINE_SECRET = az bot directline show -g rg-bwbench-demo `
+  $env:BROKER_DIRECTLINE_SECRET = az bot directline show -g rg-bwbench-sc `
       -n bot-brokerworkbench-dev --with-secrets true `
       --query "properties.properties.sites[0].key" -o tsv
   pytest -m live tests/verify/test_bot_directline.py -v

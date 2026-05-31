@@ -100,9 +100,9 @@ The Claims Impact Agent analyzes a client's loss history, shows expected premium
 
 | Surface | URL |
 |---------|-----|
-| Web Workbench | [ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io](https://ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io) |
-| Backend API | [ca-backend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io](https://ca-backend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io/docs) |
-| Bot Health | [ca-bot-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io/health](https://ca-bot-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io/health) |
+| Web Workbench | [ca-frontend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io](https://ca-frontend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io) |
+| Backend API | [ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io](https://ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io/docs) |
+| Bot Health | [ca-bot-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io/health](https://ca-bot-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io/health) |
 | Teams Bot | Sideload `bot/BrokerWorkbench-Bot.zip` in Teams |
 
 ## 🚀 Quick Start

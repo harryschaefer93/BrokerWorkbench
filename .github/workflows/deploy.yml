@@ -1,0 +1,233 @@
+name: deploy
+
+# Build and deploy individual components to Azure Container Apps on push to
+# fieldday. Each component (backend / frontend / bot / mcp) only rebuilds when
+# its own source changes (path filter). Manual dispatch lets you force any
+# subset.
+#
+# Auth: OIDC federated credential to a user-assigned managed identity in the
+# FDPO tenent (no client secret stored in GitHub). See infra/README.md for
+# the one-time setup of the GitHub federated credential and RBAC role
+# assignments (AcrPush + Container Apps Contributor on the RG).
+
+on:
+  push:
+    branches: [fieldday]
+  workflow_dispatch:
+    inputs:
+      components:
+        description: "Comma-separated list to force-build (backend,frontend,bot,mcp). Empty = path-filter detection."
+        required: false
+        default: ""
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+env:
+  AZURE_RESOURCE_GROUP_SC: rg-bwbench-sc
+  # SC ACR — single registry for all components after westus2 decommission
+  ACR_NAME_SC: acrbrokerworkbenchdevwnwtqzj2xcdts
+  ACR_LOGIN_SERVER_SC: acrbrokerworkbenchdevwnwtqzj2xcdts.azurecr.io
+  BACKEND_APP: ca-backend-brokerworkbench-dev
+  FRONTEND_APP: ca-frontend-brokerworkbench-dev
+  MCP_APP: ca-mcp-brokerworkbench-dev
+  BOT_APP: ca-bot-brokerworkbench-dev
+
+permissions:
+  id-token: write       # required for OIDC federated login
+  contents: read
+
+jobs:
+  # -------------------------------------------------------------------------
+  # Detect which components changed (only relevant on push events).
+  # -------------------------------------------------------------------------
+  detect:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend || steps.dispatch.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend || steps.dispatch.outputs.frontend }}
+      bot: ${{ steps.filter.outputs.bot || steps.dispatch.outputs.bot }}
+      mcp: ${{ steps.filter.outputs.mcp || steps.dispatch.outputs.mcp }}
+      tag: ${{ steps.tag.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Path filter
+        if: github.event_name == 'push'
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            backend:
+              - 'backend/**'
+            frontend:
+              - 'frontend-react/**'
+            bot:
+              - 'bot/**'
+            mcp:
+              - 'mcp_server/**'
+
+      - name: Manual dispatch overrides
+        if: github.event_name == 'workflow_dispatch'
+        id: dispatch
+        run: |
+          input='${{ github.event.inputs.components }}'
+          echo "input='$input'"
+          for c in backend frontend bot mcp; do
+            if [[ -z "$input" || ",$input," == *",$c,"* ]]; then
+              echo "$c=true" >> "$GITHUB_OUTPUT"
+            fi
+          done
+
+      - name: Compute image tag (short SHA)
+        id: tag
+        run: echo "tag=$(echo $GITHUB_SHA | cut -c1-7)" >> "$GITHUB_OUTPUT"
+
+  # -------------------------------------------------------------------------
+  # One reusable job pattern: az acr build + az containerapp update --image
+  # (the `--image`-only update is safe — preserves env, secrets, probes,
+  # resources — but ONLY when ingress + container name don't change. See
+  # `/memories/repo/deployment-notes.md` for the PATCH trap detail.)
+  # -------------------------------------------------------------------------
+  backend:
+    needs: detect
+    if: needs.detect.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    environment: brokerworkbench-dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: ACR build
+        run: |
+          az acr build \
+            -r ${{ env.ACR_NAME_SC }} \
+            -t broker-backend:${{ needs.detect.outputs.tag }} \
+            -t broker-backend:fieldday \
+            -f backend/Dockerfile backend/ --no-logs
+      - name: Update backend Container App (SC)
+        run: |
+          az containerapp update \
+            -g ${{ env.AZURE_RESOURCE_GROUP_SC }} \
+            -n ${{ env.BACKEND_APP }} \
+            --image ${{ env.ACR_LOGIN_SERVER_SC }}/broker-backend:${{ needs.detect.outputs.tag }}
+
+  frontend:
+    needs: detect
+    if: needs.detect.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    environment: brokerworkbench-dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: ACR build
+        run: |
+          az acr build \
+            -r ${{ env.ACR_NAME_SC }} \
+            -t broker-frontend:${{ needs.detect.outputs.tag }} \
+            -t broker-frontend:fieldday \
+            -f frontend-react/Dockerfile frontend-react/ --no-logs
+      - name: Update frontend Container App (SC)
+        run: |
+          az containerapp update \
+            -g ${{ env.AZURE_RESOURCE_GROUP_SC }} \
+            -n ${{ env.FRONTEND_APP }} \
+            --image ${{ env.ACR_LOGIN_SERVER_SC }}/broker-frontend:${{ needs.detect.outputs.tag }}
+
+  mcp:
+    needs: detect
+    if: needs.detect.outputs.mcp == 'true'
+    runs-on: ubuntu-latest
+    environment: brokerworkbench-dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: ACR build
+        run: |
+          az acr build \
+            -r ${{ env.ACR_NAME_SC }} \
+            -t broker-mcp:${{ needs.detect.outputs.tag }} \
+            -t broker-mcp:fieldday \
+            -f mcp_server/Dockerfile mcp_server/ --no-logs
+      - name: Update MCP Container App (SC)
+        run: |
+          az containerapp update \
+            -g ${{ env.AZURE_RESOURCE_GROUP_SC }} \
+            -n ${{ env.MCP_APP }} \
+            --image ${{ env.ACR_LOGIN_SERVER_SC }}/broker-mcp:${{ needs.detect.outputs.tag }}
+
+  bot:
+    needs: detect
+    if: needs.detect.outputs.bot == 'true'
+    runs-on: ubuntu-latest
+    environment: brokerworkbench-dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: ACR build
+        run: |
+          az acr build \
+            -r ${{ env.ACR_NAME_SC }} \
+            -t broker-bot:${{ needs.detect.outputs.tag }} \
+            -t broker-bot:fieldday \
+            -f bot/Dockerfile bot/ --no-logs
+      - name: Update bot Container App (SC)
+        run: |
+          az containerapp update \
+            -g ${{ env.AZURE_RESOURCE_GROUP_SC }} \
+            -n ${{ env.BOT_APP }} \
+            --image ${{ env.ACR_LOGIN_SERVER_SC }}/broker-bot:${{ needs.detect.outputs.tag }}
+
+  # -------------------------------------------------------------------------
+  # Optional smoke verification after deploys. Live tests require the
+  # DirectLine secret + SC frontend URL — read at runtime from Azure.
+  # -------------------------------------------------------------------------
+  verify:
+    needs: [backend, frontend, mcp, bot]
+    if: always() && !cancelled() && (needs.backend.result == 'success' || needs.frontend.result == 'success' || needs.mcp.result == 'success' || needs.bot.result == 'success')
+    runs-on: ubuntu-latest
+    environment: brokerworkbench-dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: Install verify deps
+        run: pip install httpx pyyaml pytest pytest-asyncio
+      - name: Read backend + DirectLine
+        id: env
+        run: |
+          BE=$(az containerapp show -g ${{ env.AZURE_RESOURCE_GROUP_SC }} -n ${{ env.BACKEND_APP }} --query 'properties.configuration.ingress.fqdn' -o tsv)
+          FE=$(az containerapp show -g ${{ env.AZURE_RESOURCE_GROUP_SC }} -n ${{ env.FRONTEND_APP }} --query 'properties.configuration.ingress.fqdn' -o tsv)
+          DL=$(az bot directline show -g ${{ env.AZURE_RESOURCE_GROUP_SC }} -n bot-brokerworkbench-dev --with-secrets true --query 'properties.properties.sites[0].key' -o tsv)
+          echo "::add-mask::$DL"
+          echo "BROKER_BACKEND_URL=https://$BE"   >> "$GITHUB_ENV"
+          echo "BROKER_FRONTEND_URL=https://$FE"  >> "$GITHUB_ENV"
+          echo "BROKER_DIRECTLINE_SECRET=$DL"     >> "$GITHUB_ENV"
+      - name: Backend health
+        run: curl -fsS "$BROKER_BACKEND_URL/health" | head -c 500
+      - name: Frontend reachable
+        run: curl -fsS "$BROKER_FRONTEND_URL/" -o /dev/null
+      - name: DirectLine parity (live)
+        run: pytest -m live tests/verify/test_bot_directline.py -v --tb=short

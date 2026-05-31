@@ -17,7 +17,7 @@ socket.getaddrinfo = lambda *a, **k: [r for r in _orig_getaddrinfo(*a, **k) if r
 from azure.identity import AzureCliCredential  # noqa: E402
 import requests  # noqa: E402
 
-ACR_NAME = sys.argv[1] if len(sys.argv) > 1 else "acrbrokerworkbenchdev2qdxa3smrnc7a"
+ACR_NAME = sys.argv[1] if len(sys.argv) > 1 else "acrbrokerworkbenchdevwnwtqzj2xcdts"
 TENANT = "44e26be6-f73b-4438-8335-205b417d5b4d"
 
 cred = AzureCliCredential()
