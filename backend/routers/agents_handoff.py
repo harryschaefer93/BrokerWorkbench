@@ -30,6 +30,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+import os
 import uuid
 from typing import Any
 
@@ -101,18 +102,29 @@ async def agent_handoff_stream(
     request: ChatRequest,
     x_conversation_id: str | None = Header(default=None, alias="X-Conversation-Id"),
 ):
-    """Stream the handoff workflow as SSE matching the legacy contract."""
-    # Generate a server-side conversation id if the client hasn't yet
-    # persisted one. The frontend (Phase B B4) will echo this back on
-    # subsequent turns via the X-Conversation-Id header.
+    """Stream the handoff workflow as SSE matching the legacy contract.
+
+    Routing mode is selected by ``AGENT_BACKEND_MODE`` env var:
+        ``fastapi`` (default) \u2014 run the workflow in-process via
+            :func:`_stream_handoff`.
+        ``hosted``  \u2014 proxy to a Foundry Hosted-agent ``/responses``
+            endpoint via :func:`_stream_hosted`. Requires
+            ``HOSTED_AGENT_ENDPOINT`` to be set.
+    """
     conversation_id = x_conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
+    mode = os.getenv("AGENT_BACKEND_MODE", "fastapi").strip().lower()
+    if mode == "hosted":
+        stream = _stream_hosted(request, conversation_id)
+    else:
+        stream = _stream_handoff(request, conversation_id)
     return StreamingResponse(
-        _stream_handoff(request, conversation_id),
+        stream,
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
             "X-Accel-Buffering": "no",
             "X-Conversation-Id": conversation_id,
+            "X-Agent-Backend-Mode": mode,
         },
     )
 
@@ -343,3 +355,151 @@ async def _stream_handoff(request: ChatRequest, conversation_id: str):
     except Exception as exc:  # noqa: BLE001 — surface anything to the UI
         log.exception("Handoff streaming error")
         yield _frame({"type": "error", "content": str(exc)})
+
+# ── Hosted-agent proxy mode ─────────────────────────────────────────────
+# Translates a Foundry Hosted-agent /responses SSE stream into the
+# 5+2-frame contract the React panel and Teams bot already consume.
+# Triggered when ``AGENT_BACKEND_MODE=hosted``.
+
+
+_HOSTED_TIMEOUT_SECONDS = 120
+
+
+async def _stream_hosted(request: ChatRequest, conversation_id: str):
+    """Proxy a turn to the Hosted-agent Responses endpoint and adapt SSE.
+
+    Maps the Foundry ``response.output_text.delta`` events to our ``token``
+    frames, and the terminal ``response.completed`` to our ``done`` frame.
+    Handoff/tool events are surfaced as ``status`` frames when the platform
+    emits them — full ``tool_call``/``tool_result`` fidelity from the hosted
+    side is a follow-up (B3 over hosted).
+    """
+    import httpx
+    from azure.identity.aio import (
+        AzureCliCredential,
+        ChainedTokenCredential,
+        EnvironmentCredential,
+        ManagedIdentityCredential,
+    )
+
+    log = logging.LoggerAdapter(logger, {"conversation_id": conversation_id})
+    endpoint = os.getenv("HOSTED_AGENT_ENDPOINT")
+    if not endpoint:
+        yield _frame(
+            {
+                "type": "error",
+                "content": (
+                    "AGENT_BACKEND_MODE=hosted but HOSTED_AGENT_ENDPOINT is not set."
+                ),
+            }
+        )
+        return
+
+    client_id = os.getenv("AZURE_CLIENT_ID")
+    credential = ChainedTokenCredential(
+        EnvironmentCredential(),
+        ManagedIdentityCredential(client_id=client_id),
+        AzureCliCredential(),
+    )
+    # Foundry Responses endpoint accepts Entra tokens for the AI scope.
+    token = await credential.get_token("https://ai.azure.com/.default")
+
+    last_speaker: str | None = None
+    final_text: list[str] = []
+    body = {
+        "input": _build_prompt(request.message, request.history),
+        "stream": True,
+        # Hosting platform manages history; we don't need to store on its side
+        # because we're a thin proxy that already replays history above.
+        "store": False,
+    }
+
+    try:
+        async with httpx.AsyncClient(timeout=_HOSTED_TIMEOUT_SECONDS) as client:
+            async with client.stream(
+                "POST",
+                endpoint,
+                json=body,
+                headers={
+                    "Authorization": f"Bearer {token.token}",
+                    "Content-Type": "application/json",
+                    "Accept": "text/event-stream",
+                },
+            ) as resp:
+                resp.raise_for_status()
+                async for line in resp.aiter_lines():
+                    if not line or not line.startswith("data: "):
+                        continue
+                    raw = line[6:].strip()
+                    if raw == "[DONE]":
+                        break
+                    try:
+                        event = json.loads(raw)
+                    except json.JSONDecodeError:
+                        continue
+                    etype = event.get("type", "")
+                    # Token deltas.
+                    if etype.endswith("output_text.delta"):
+                        delta = event.get("delta") or ""
+                        if delta:
+                            final_text.append(delta)
+                            yield _frame({"type": "token", "content": delta})
+                        continue
+                    # Routing / executor transitions surface as workflow
+                    # events on the hosted side. Best-effort surface.
+                    exec_id = (
+                        event.get("executor_id")
+                        or event.get("agent")
+                        or (event.get("data") or {}).get("executor_id")
+                    )
+                    if exec_id and exec_id != last_speaker:
+                        last_speaker = exec_id
+                        mapped = _AGENT_NAME_MAP.get(exec_id, exec_id)
+                        yield _frame(
+                            {
+                                "type": "routing",
+                                "agent": mapped,
+                                "content": f"Routing to {exec_id}…",
+                            }
+                        )
+                    if etype.endswith(".completed") or etype == "response.completed":
+                        # Some platform builds include a final consolidated
+                        # output_text under .response.output[0].content[*].text.
+                        if not final_text:
+                            try:
+                                outputs = (
+                                    event.get("response", {})
+                                    .get("output", [])
+                                )
+                                for o in outputs:
+                                    for c in o.get("content", []):
+                                        if c.get("type") == "output_text":
+                                            final_text.append(c.get("text", ""))
+                            except Exception:  # noqa: BLE001
+                                pass
+                        break
+                    if etype == "error" or "error" in etype:
+                        yield _frame(
+                            {
+                                "type": "error",
+                                "content": str(event.get("error") or event),
+                            }
+                        )
+                        return
+    except httpx.HTTPError as exc:
+        log.exception("hosted-agent proxy http error")
+        yield _frame({"type": "error", "content": f"hosted proxy: {exc}"})
+        return
+    except Exception as exc:  # noqa: BLE001
+        log.exception("hosted-agent proxy error")
+        yield _frame({"type": "error", "content": str(exc)})
+        return
+    finally:
+        try:
+            await credential.close()
+        except Exception:  # noqa: BLE001
+            pass
+
+    final_agent = _AGENT_NAME_MAP.get(last_speaker or "Triage", "BrokerAgent")
+    log.info("hosted proxy done final_agent=%s", final_agent)
+    yield _frame({"type": "done", "agent": final_agent, "suggestions": []})

@@ -40,25 +40,10 @@ param aiFoundryName string = ''
 @description('Name for the AI Foundry project (child of the Foundry account)')
 param aiProjectName string = '${baseName}-agents'
 
-@description('OpenAI model to deploy in the Foundry account')
-param aiModelDeploymentName string = 'gpt-4.1'
-
-@description('OpenAI model name to deploy')
-param aiModelName string = 'gpt-4.1'
-
-@description('OpenAI model version')
-param aiModelVersion string = '2025-04-14'
-
-@description('Skip model deployment (use when subscription lacks quota — deploy model via portal instead)')
-param skipModelDeployment bool = false
-
-@description('Azure region for the secondary AI Foundry account (OpenAI catalog: gpt-5, gpt-5-mini)')
-param secondaryAiLocation string = 'swedencentral'
-
-@description('Deployment name for gpt-5 on the secondary (Sweden Central) Foundry account')
+@description('Deployment name for gpt-5 on the Foundry account')
 param gpt5DeploymentName string = 'gpt-5'
 
-@description('Deployment name for gpt-5-mini on the secondary (Sweden Central) Foundry account')
+@description('Deployment name for gpt-5-mini on the Foundry account')
 param gpt5MiniDeploymentName string = 'gpt-5-mini'
 
 @description('TPM capacity (in thousands) for gpt-5 GlobalStandard deployment')
@@ -67,8 +52,8 @@ param gpt5Capacity int = 50
 @description('TPM capacity (in thousands) for gpt-5-mini GlobalStandard deployment')
 param gpt5MiniCapacity int = 50
 
-@description('Skip secondary (SC) model deployments (use when subscription lacks quota — deploy via portal instead)')
-param skipSecondaryModelDeployment bool = false
+@description('Skip model deployments (use when subscription lacks quota — deploy models via portal instead)')
+param skipModelDeployment bool = false
 
 // Variables
 
@@ -237,47 +222,8 @@ resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-pre
   }
 }
 
-resource aiModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (!skipModelDeployment) {
+resource gpt5Deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (!skipModelDeployment) {
   parent: aiFoundry
-  name: aiModelDeploymentName
-  sku: {
-    capacity: 1
-    name: 'GlobalStandard'
-  }
-  properties: {
-    model: {
-      name: aiModelName
-      format: 'OpenAI'
-      version: aiModelVersion
-    }
-  }
-}
-
-// ── Secondary AI Foundry account (Sweden Central) for OpenAI catalog: gpt-5, gpt-5-mini ──
-// FDPO: disableLocalAuth + System-Assigned MI + Entra RBAC only (no keys)
-
-var aiServicesSecondaryName = 'ai-${baseName}-${environment}-sc-${take(uniqueString(resourceGroup().id), 6)}'
-
-resource aiServicesSecondary 'Microsoft.CognitiveServices/accounts@2025-04-01-preview' = {
-  name: aiServicesSecondaryName
-  location: secondaryAiLocation
-  tags: union(tags, { component: 'ai', region: 'sc' })
-  identity: {
-    type: 'SystemAssigned'
-  }
-  sku: {
-    name: 'S0'
-  }
-  kind: 'AIServices'
-  properties: {
-    customSubDomainName: aiServicesSecondaryName
-    disableLocalAuth: true
-    publicNetworkAccess: 'Enabled'
-  }
-}
-
-resource gpt5Deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (!skipSecondaryModelDeployment) {
-  parent: aiServicesSecondary
   name: gpt5DeploymentName
   sku: {
     name: 'GlobalStandard'
@@ -292,8 +238,8 @@ resource gpt5Deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-0
   }
 }
 
-resource gpt5MiniDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (!skipSecondaryModelDeployment) {
-  parent: aiServicesSecondary
+resource gpt5MiniDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (!skipModelDeployment) {
+  parent: aiFoundry
   name: gpt5MiniDeploymentName
   sku: {
     name: 'GlobalStandard'
@@ -417,13 +363,13 @@ resource aiUserProject 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   }
 }
 
-// RBAC: Backend identity gets Cognitive Services OpenAI User on the secondary (SC) account
+// RBAC: Backend identity gets Cognitive Services OpenAI User on the Foundry account
 // Role: Cognitive Services OpenAI User (5e0bd9bd-7b93-4f28-af87-19fc36ad61bd)
 // MCP is not granted — it does not call OpenAI/LLM endpoints
 
-resource openAiUserBackendSecondary 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
-  name: guid(aiServicesSecondary.id, backendIdentity.id, '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
-  scope: aiServicesSecondary
+resource openAiUserBackend 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(aiFoundry.id, backendIdentity.id, '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
+  scope: aiFoundry
   properties: {
     principalId: backendIdentity.properties.principalId
     principalType: 'ServicePrincipal'
@@ -545,7 +491,7 @@ resource backendContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'ENVIRONMENT', value: environment }
             { name: 'AZURE_CLIENT_ID', value: backendIdentity.properties.clientId }
             { name: 'AZURE_AI_FOUNDRY_PROJECT_CONNECTION_STRING', value: '${aiFoundry.properties.endpoint}/api/projects/${aiProjectName}' }
-            { name: 'AZURE_AI_FOUNDRY_ENDPOINT', value: aiServicesSecondary.properties.endpoint }
+            { name: 'AZURE_AI_FOUNDRY_ENDPOINT', value: aiFoundry.properties.endpoint }
             { name: 'AZURE_AI_MODEL_DEPLOYMENT', value: gpt5DeploymentName }
             { name: 'AZURE_AI_MODEL_DEPLOYMENT_MINI', value: gpt5MiniDeploymentName }
             { name: 'MCP_SERVER_URL', value: 'https://${mcpContainerApp.properties.configuration.ingress.fqdn}/mcp' }
@@ -841,13 +787,10 @@ output aiFoundryEndpoint string = aiFoundry.properties.endpoint
 @description('Azure AI Foundry project endpoint (for SDK connection)')
 output aiFoundryProjectEndpoint string = '${aiFoundry.properties.endpoint}/api/projects/${aiProjectName}'
 
-@description('Secondary (Sweden Central) AI Services account endpoint (OpenAI catalog)')
-output secondaryAiEndpoint string = aiServicesSecondary.properties.endpoint
-
-@description('Deployment name for gpt-5 on the secondary account')
+@description('Deployment name for gpt-5 on the Foundry account')
 output gpt5DeploymentNameOut string = gpt5DeploymentName
 
-@description('Deployment name for gpt-5-mini on the secondary account')
+@description('Deployment name for gpt-5-mini on the Foundry account')
 output gpt5MiniDeploymentNameOut string = gpt5MiniDeploymentName
 
 @description('Resource names for reference')
@@ -864,5 +807,4 @@ output resourceNames object = {
   vnet: vnet.name
   aiFoundry: aiFoundry.name
   aiProject: aiProject.name
-  secondaryAi: aiServicesSecondary.name
 }
