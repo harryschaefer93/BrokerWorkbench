@@ -29,20 +29,36 @@ test.describe('chat e2e', () => {
     const panel = page.locator('[data-testid=chat-panel]');
     await expect(panel).toBeVisible({ timeout: 30_000 });
 
+    // Wait for welcome message to render (so we can distinguish from later answer).
+    const assistantMessages = page.locator('[data-testid=chat-message-assistant]');
+    await expect(assistantMessages.first()).toBeVisible({ timeout: 30_000 });
+    const initialAssistantCount = await assistantMessages.count();
+
     // Type a prompt
     const input = page.locator('[data-testid=chat-input]');
     await input.fill('Show me the top 3 critical renewals');
     await page.locator('[data-testid=chat-send]').click();
 
-    // Wait for an assistant message that finishes streaming.
-    // (data-streaming flips true -> false once `done` SSE arrives.)
-    const assistantMsg = page
-      .locator('[data-testid=chat-message-assistant]')
-      .last();
-    await expect(assistantMsg).toBeVisible({ timeout: 60_000 });
-    await expect(assistantMsg).toHaveAttribute('data-streaming', 'false', {
-      timeout: 120_000,
-    });
+    // Wait for a NEW assistant message to appear.
+    await expect(async () => {
+      const c = await assistantMessages.count();
+      expect(c).toBeGreaterThan(initialAssistantCount);
+    }).toPass({ timeout: 60_000 });
+
+    const assistantMsg = assistantMessages.last();
+    await expect(assistantMsg).toBeVisible();
+
+    // Wait for streaming to complete on that NEW message, and for the
+    // final answer text to be substantially populated (welcome message has
+    // data-streaming=false too, so we ALSO assert content length).
+    const assertAnswerReady = async () => {
+      const streaming = await assistantMsg.getAttribute('data-streaming');
+      const text = (await assistantMsg.innerText()).trim();
+      if (streaming !== 'false') throw new Error(`still streaming (=${streaming})`);
+      if (text.length < 50) throw new Error(`answer still short (len=${text.length})`);
+    };
+    await expect(assertAnswerReady).toPass({ timeout: 240_000 });
+    await page.waitForTimeout(300);
 
     // Answer should mention renewal-relevant words.
     const text = (await assistantMsg.innerText()).toLowerCase();
