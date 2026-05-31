@@ -34,25 +34,59 @@ logger = logging.getLogger(__name__)
 
 
 def _build_chat_client():
-    """Construct the Azure OpenAI chat client the workflow's specialists share."""
-    # Re-use the existing factory so local and hosted both go through the
-    # same code path (one less drift surface). PYTHONPATH includes both
-    # /app and /app/backend so `agents.foundry.chat_client` resolves.
-    from agents.foundry.chat_client import build_chat_client
+    """Construct the chat client used by all specialists.
 
-    return build_chat_client()
+    In Foundry-hosted mode we use ``FoundryChatClient`` so the platform's
+    own gateway handles token audience + model routing (it reads
+    ``FOUNDRY_PROJECT_ENDPOINT`` + ``AZURE_AI_MODEL_DEPLOYMENT_NAME``
+    auto-injected by the host). This matches the pattern in every
+    foundry-samples hosted-agent sample.
+    """
+    project_endpoint = os.environ.get("FOUNDRY_PROJECT_ENDPOINT")
+    model = (
+        os.environ.get("AZURE_AI_MODEL_DEPLOYMENT_NAME")  # platform-injected
+        or os.environ.get("AZURE_AI_MODEL_DEPLOYMENT")     # our manifest var
+        or "gpt-5"
+    )
+    if not project_endpoint:
+        # Local dev fallback: use the existing OpenAIChatCompletionClient path.
+        from agents.foundry.chat_client import build_chat_client
+        return build_chat_client()
+
+    # Map FOUNDRY_AGENT_INSTANCE_CLIENT_ID -> AZURE_CLIENT_ID for any
+    # downstream code that reads AZURE_CLIENT_ID.
+    inst = os.environ.get("FOUNDRY_AGENT_INSTANCE_CLIENT_ID")
+    if inst and not os.environ.get("AZURE_CLIENT_ID"):
+        os.environ["AZURE_CLIENT_ID"] = inst
+
+    from agent_framework.foundry import FoundryChatClient
+    from azure.identity import DefaultAzureCredential
+
+    logger.info(
+        "Hosted FoundryChatClient: project=%s model=%s", project_endpoint, model
+    )
+    return FoundryChatClient(
+        project_endpoint=project_endpoint,
+        model=model,
+        credential=DefaultAzureCredential(),
+    )
 
 
 async def _build_workflow_agent():
-    """Build the handoff workflow and wrap it as an Agent Framework agent."""
+    """Build the handoff workflow and wrap it as an Agent Framework agent.
+
+    NOTE: we do NOT enter the MCP context here \u2014 the platform's readiness
+    probe must succeed before any I/O work. The handoff workflow lazily
+    opens MCP per-request (the InstrumentedMCPTool's ``__aenter__`` is
+    called inside ``_stream_handoff`` in the FastAPI backend, and the
+    workflow's tool wrapper handles it transparently in hosted mode too).
+    Eagerly entering MCP at startup blocks the bind on port 8088 and
+    triggers ``session_not_ready`` failures when MCP is unreachable.
+    """
     from agents.foundry.handoff import build_handoff
 
     chat_client = _build_chat_client()
-    workflow, mcp_tool, _tool_queue = await build_handoff(chat_client=chat_client)
-    # Enter the MCP context so the workflow can call tools throughout the
-    # server's lifetime. The container process owns the lifecycle \u2014 we
-    # never tear it down.
-    await mcp_tool.__aenter__()
+    workflow, _mcp_tool, _tool_queue = await build_handoff(chat_client=chat_client)
     return workflow.as_agent(
         name="brokerworkbench",
         description=(
@@ -66,7 +100,22 @@ def main() -> None:
     logging.basicConfig(
         level=os.getenv("LOG_LEVEL", "INFO"),
         format="%(asctime)s %(levelname)s %(name)s :: %(message)s",
+        force=True,
     )
+    # Emit a clear startup banner to stdout so even raw container logs show
+    # *something* if telemetry never wires up.
+    import sys
+    sys.stderr.write(
+        "BROKERWORKBENCH HOSTED-AGENT BOOTING\n"
+        f"  FOUNDRY_PROJECT_ENDPOINT={os.environ.get('FOUNDRY_PROJECT_ENDPOINT','<unset>')}\n"
+        f"  AZURE_AI_FOUNDRY_ENDPOINT={os.environ.get('AZURE_AI_FOUNDRY_ENDPOINT','<unset>')}\n"
+        f"  AZURE_AI_MODEL_DEPLOYMENT={os.environ.get('AZURE_AI_MODEL_DEPLOYMENT','<unset>')}\n"
+        f"  MCP_SERVER_URL={os.environ.get('MCP_SERVER_URL','<unset>')}\n"
+        f"  AZURE_CLIENT_ID={os.environ.get('AZURE_CLIENT_ID','<unset>')}\n"
+        f"  FOUNDRY_AGENT_INSTANCE_CLIENT_ID={os.environ.get('FOUNDRY_AGENT_INSTANCE_CLIENT_ID','<unset>')}\n"
+    )
+    sys.stderr.flush()
+
     # Import here so the binary fails fast with a clear message if the
     # hosting package wasn't installed.
     from agent_framework_foundry_hosting import ResponsesHostServer
@@ -86,10 +135,22 @@ def main() -> None:
                     return []
 
             context.get_history = safe_get_history  # type: ignore[method-assign]
-            async for item in super()._handle_inner_agent(request, context):
-                yield item
+            try:
+                async for item in super()._handle_inner_agent(request, context):
+                    yield item
+            except Exception as exc:  # noqa: BLE001
+                logger.exception("inner agent failed")
+                sys.stderr.write(f"HOSTED AGENT REQUEST FAILED: {exc!r}\n")
+                sys.stderr.flush()
+                raise
 
-    agent = asyncio.run(_build_workflow_agent())
+    try:
+        agent = asyncio.run(_build_workflow_agent())
+    except Exception as exc:  # noqa: BLE001
+        sys.stderr.write(f"BUILD WORKFLOW AGENT FAILED: {exc!r}\n")
+        sys.stderr.flush()
+        raise
+
     server = _ResilientResponsesHostServer(agent)
     server.run()
 

@@ -7,6 +7,7 @@
 agent-framework-core>=1.6.0,<2
 agent-framework-orchestrations>=1.0.0rc2
 agent-framework-openai>=1.6.0,<2
+agent-framework-foundry
 agent-framework-foundry-hosting
 azure-identity>=1.17.0
 python-dotenv>=1.0.0
