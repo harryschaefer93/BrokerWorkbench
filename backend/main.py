@@ -17,16 +17,10 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.trustedhost import TrustedHostMiddleware
 
-# Original routers (mock data)
-from routers import policies, clients, carriers, renewals
-
-# v2 routers (SQLite database via SQLAlchemy)
+# SQL-backed routers (Azure SQL via SQLAlchemy; SQLite for local dev)
 from routers import policies_v2, clients_v2, carriers_v2, renewals_v2
 
-# AI Agent router (Phase 2)
-from routers import agents
-
-# AI Agent handoff router (Phase A sub-step 3 — Agent Framework HandoffBuilder)
+# AI Agent handoff router — Microsoft Agent Framework HandoffBuilder over MCP tools
 from routers import agents_handoff
 
 # Initialize FastAPI app
@@ -71,20 +65,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Include v1 routers (mock data - for backward compatibility)
-app.include_router(policies.router)
-app.include_router(clients.router)
-app.include_router(carriers.router)
-app.include_router(renewals.router)
-
-# Include v2 routers (SQLite/SQLAlchemy - production ready)
+# Include SQL-backed routers
 app.include_router(policies_v2.router)
 app.include_router(clients_v2.router)
 app.include_router(carriers_v2.router)
 app.include_router(renewals_v2.router)
 
-# Include AI Agent router
-app.include_router(agents.router)
+# Include AI Agent handoff router (single chat endpoint: /api/agent/chat/handoff/stream)
 app.include_router(agents_handoff.router)
 
 
@@ -97,28 +84,17 @@ async def root():
         "status": "running",
         "docs": "/docs",
         "endpoints": {
-            "v1_mock_data": {
-                "policies": "/api/policies",
-                "clients": "/api/clients",
-                "carriers": "/api/carriers",
-                "renewals": "/api/renewals"
-            },
-            "v2_sqlite_db": {
+            "data_v2": {
                 "policies": "/api/v2/policies",
                 "clients": "/api/v2/clients",
                 "carriers": "/api/v2/carriers",
-                "renewals": "/api/v2/renewals"
+                "renewals": "/api/v2/renewals",
             },
             "agents": {
-                "chat": "/api/agent/chat",
-                "coverage_analysis": "/api/agent/analyze/coverage",
-                "claims_analysis": "/api/agent/analyze/claims",
-                "quote_comparison": "/api/agent/compare/quotes",
-                "opportunities": "/api/agent/opportunities",
-                "high_risk_clients": "/api/agent/high-risk-clients"
-            }
+                "chat_stream": "/api/agent/chat/handoff/stream",
+            },
         },
-        "note": "Use v2 endpoints for SQLite database (Azure SQL ready). Use agent endpoints for AI-powered analysis."
+        "note": "All data endpoints are SQL-backed (Azure SQL / SQLite). Chat is served by the Microsoft Agent Framework handoff workflow over MCP tools.",
     }
 
 

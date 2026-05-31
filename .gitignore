@@ -59,6 +59,7 @@ smoke_*.log
 /*.json
 /*.txt
 /*.tar.gz
+scratch/
 
 # Azure dev artifacts
 .azure/

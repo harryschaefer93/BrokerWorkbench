@@ -35,11 +35,24 @@ from typing import Any
 
 from fastapi import APIRouter, Header
 from fastapi.responses import StreamingResponse
+from pydantic import BaseModel, Field
+from enum import Enum
 
-# Reuse the legacy request schema verbatim — no duplication, no edits to
-# agents.py. ChatRequest is a public symbol in that module. Relative import
-# avoids the routers/backend.routers dual-name trap (both are on sys.path).
-from .agents import ChatRequest
+
+class AgentType(str, Enum):
+    QUOTE = "quote"
+    CROSSSELL = "crosssell"
+    CLAIMS = "claims"
+    TRIAGE = "triage"
+
+
+class ChatRequest(BaseModel):
+    """Request schema for the handoff chat endpoint."""
+    message: str = Field(..., description="User's message to the agent")
+    agent: AgentType = Field(..., description="Entry agent (always triage in handoff mode)")
+    client_id: str | None = Field(None, description="Optional client ID for context")
+    conversation_id: str | None = Field(None, description="Continue existing conversation")
+    history: list[dict] | None = Field(None, description="Conversation history for context")
 
 logger = logging.getLogger(__name__)
 

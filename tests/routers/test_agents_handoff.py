@@ -90,7 +90,8 @@ def test_handoff_stream_sse_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     events = _scripted_events()
 
     async def _fake_build_handoff():
-        return _FakeWorkflow(events), _FakeMCPTool()
+        import asyncio
+        return _FakeWorkflow(events), _FakeMCPTool(), asyncio.Queue()
 
     # Inject a stub module into sys.modules so the lazy
     # `from backend.agents.foundry.handoff import build_handoff` inside
@@ -102,10 +103,10 @@ def test_handoff_stream_sse_contract(monkeypatch: pytest.MonkeyPatch) -> None:
     # sys.modules, shadowing the workspace-root `data/seed/` package and
     # breaking `tests/seed/test_setup.py` on the next test that imports
     # from `data.seed`. See backend/agents/tools.py:17-19.
-    fake_mod = ModuleType("backend.agents.foundry.handoff")
+    fake_mod = ModuleType("agents.foundry.handoff")
     fake_mod.build_handoff = _fake_build_handoff
     monkeypatch.setitem(
-        sys.modules, "backend.agents.foundry.handoff", fake_mod
+        sys.modules, "agents.foundry.handoff", fake_mod
     )
 
     app = FastAPI()

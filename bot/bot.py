@@ -7,6 +7,7 @@ and returns polished Adaptive Cards.
 
 from collections import defaultdict
 from typing import Any
+import json
 
 import httpx
 from botbuilder.core import CardFactory, MessageFactory, TurnContext
@@ -101,24 +102,56 @@ class BrokerBot(TeamsActivityHandler):
     async def _call_backend(
         self, message: str, history: list[dict[str, str]]
     ) -> tuple[str, str]:
-        """POST to the BrokerWorkbench backend and return (agent_name, response_text)."""
+        """Stream from the BrokerWorkbench handoff endpoint and aggregate.
+
+        Consumes SSE events from /api/agent/chat/handoff/stream:
+        - ``token``    \u2192 append to response text
+        - ``routing``  \u2192 capture active specialist agent name
+        - ``done``     \u2192 finalize (use ``content`` if no tokens streamed)
+        - ``error``    \u2192 raise
+        Returns ``(agent_name, response_text)``.
+        """
         payload: dict[str, Any] = {
             "message": message,
             "agent": "triage",
             "history": history,
         }
 
-        async with httpx.AsyncClient(timeout=60.0) as client:
-            resp = await client.post(
-                f"{self.backend_url}/api/agent/chat",
-                json=payload,
-            )
-            resp.raise_for_status()
-            data = resp.json()
+        agent_name = "BrokerAgent"
+        full_text = ""
 
-        agent_name = data.get("agent", "BrokerAgent")
-        response_text = data.get("response", "No response from backend.")
-        return agent_name, response_text
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            async with client.stream(
+                "POST",
+                f"{self.backend_url}/api/agent/chat/handoff/stream",
+                json=payload,
+                headers={"Accept": "text/event-stream"},
+            ) as resp:
+                resp.raise_for_status()
+                async for raw_line in resp.aiter_lines():
+                    if not raw_line or not raw_line.startswith("data: "):
+                        continue
+                    try:
+                        event = json.loads(raw_line[6:].strip())
+                    except (json.JSONDecodeError, ValueError):
+                        continue
+                    etype = event.get("type")
+                    if etype == "token":
+                        full_text += event.get("content", "")
+                    elif etype == "routing":
+                        if event.get("agent"):
+                            agent_name = event["agent"]
+                    elif etype == "done":
+                        if event.get("agent"):
+                            agent_name = event["agent"]
+                        if not full_text and event.get("content"):
+                            full_text = event["content"]
+                    elif etype == "error":
+                        raise RuntimeError(event.get("content") or "Agent error")
+
+        if not full_text:
+            full_text = "No response from backend."
+        return agent_name, full_text
 
     # ------------------------------------------------------------------
     # Helpers
