@@ -363,13 +363,55 @@ async def _stream_handoff(request: ChatRequest, conversation_id: str):
 
 
 _HOSTED_TIMEOUT_SECONDS = 120
+_HOSTED_RETRY_DELAY_SECONDS = 6.0
 
 
 async def _stream_hosted(request: ChatRequest, conversation_id: str):
-    """Proxy a turn to the Hosted-agent Responses endpoint and adapt SSE.
+    """Public hosted-agent stream with a single retry on early failure.
 
-    Maps the Foundry OpenAI Responses event vocabulary to our 5+2-frame
-    contract. Verified event types from sc-v5 hosted agent:
+    Foundry hosted-agent responses occasionally fail with ``server_error``
+    when the gpt-5 deployment hits its TPM ceiling. The failure surfaces
+    within a few seconds, before any tokens are emitted. We retry once
+    after a short backoff so a transient rate-limit hit doesn't poison the
+    user-visible turn. If the second attempt also fails (or fails after
+    we've already emitted output), the error propagates.
+    """
+    last_error: dict[str, Any] | None = None
+    for attempt in range(2):
+        emitted_any = False
+        had_error = False
+        async for event in _stream_hosted_attempt(
+            request, conversation_id, attempt=attempt
+        ):
+            etype = event.get("type")
+            if etype == "error":
+                last_error = event
+                had_error = True
+                if not emitted_any and attempt == 0:
+                    # Swallow the error and retry the whole turn.
+                    break
+                yield _frame(event)
+                return
+            yield _frame(event)
+            if etype in {"token", "tool_call", "tool_result", "routing"}:
+                emitted_any = True
+        if not had_error:
+            return
+        await asyncio.sleep(_HOSTED_RETRY_DELAY_SECONDS)
+    if last_error is not None:
+        yield _frame(last_error)
+
+
+async def _stream_hosted_attempt(
+    request: ChatRequest,
+    conversation_id: str,
+    attempt: int = 0,
+):
+    """Proxy a single turn to the Hosted-agent Responses endpoint.
+
+    Yields raw dict payloads (no SSE framing). Callers wrap with
+    :func:`_frame`. Maps the Foundry OpenAI Responses event vocabulary to
+    our 5+2-frame contract. Verified event types from sc-v5 hosted agent:
         response.created / .in_progress / .completed
         response.output_item.added / .done  (reasoning | function_call | message)
         response.output_text.delta / .done
@@ -392,17 +434,17 @@ async def _stream_hosted(request: ChatRequest, conversation_id: str):
         ManagedIdentityCredential,
     )
 
-    log = logging.LoggerAdapter(logger, {"conversation_id": conversation_id})
+    log = logging.LoggerAdapter(
+        logger, {"conversation_id": conversation_id, "attempt": attempt}
+    )
     endpoint = os.getenv("HOSTED_AGENT_ENDPOINT")
     if not endpoint:
-        yield _frame(
-            {
-                "type": "error",
-                "content": (
-                    "AGENT_BACKEND_MODE=hosted but HOSTED_AGENT_ENDPOINT is not set."
-                ),
-            }
-        )
+        yield {
+            "type": "error",
+            "content": (
+                "AGENT_BACKEND_MODE=hosted but HOSTED_AGENT_ENDPOINT is not set."
+            ),
+        }
         return
 
     client_id = os.getenv("AZURE_CLIENT_ID")
@@ -456,7 +498,7 @@ async def _stream_hosted(request: ChatRequest, conversation_id: str):
                         delta = event.get("delta") or ""
                         if delta:
                             final_text.append(delta)
-                            yield _frame({"type": "token", "content": delta})
+                            yield {"type": "token", "content": delta}
                         continue
 
                     # 2. New output item arrives \u2014 detect function_call.
@@ -477,23 +519,19 @@ async def _stream_hosted(request: ChatRequest, conversation_id: str):
                             last_speaker = target
                             mapped = _AGENT_NAME_MAP.get(target, target)
                             log.info("hosted routing to=%s", target)
-                            yield _frame(
-                                {
-                                    "type": "routing",
-                                    "agent": mapped,
-                                    "content": f"Routing to {target}\u2026",
-                                }
-                            )
+                            yield {
+                                "type": "routing",
+                                "agent": mapped,
+                                "content": f"Routing to {target}\u2026",
+                            }
                         else:
                             # Real MCP tool call \u2014 emit start frame.
-                            yield _frame(
-                                {
-                                    "type": "tool_call",
-                                    "name": name,
-                                    "arguments": {},  # filled progressively
-                                    "call_id": call_id,
-                                }
-                            )
+                            yield {
+                                "type": "tool_call",
+                                "name": name,
+                                "arguments": {},  # filled progressively
+                                "call_id": call_id,
+                            }
                         continue
 
                     # 3. Accumulate function_call argument chunks.
@@ -528,14 +566,12 @@ async def _stream_hosted(request: ChatRequest, conversation_id: str):
                             args_parsed = {"_raw": args_str}
                         status = item.get("status", "completed")
                         ok = status == "completed"
-                        yield _frame(
-                            {
-                                "type": "tool_result",
-                                "call_id": call_id,
-                                "ok": ok,
-                                "summary": json.dumps(args_parsed)[:160],
-                            }
-                        )
+                        yield {
+                            "type": "tool_result",
+                            "call_id": call_id,
+                            "ok": ok,
+                            "summary": json.dumps(args_parsed)[:160],
+                        }
                         continue
 
                     # 5. Terminal events \u2014 capture final text if we missed
@@ -556,20 +592,20 @@ async def _stream_hosted(request: ChatRequest, conversation_id: str):
 
                     # 6. Errors.
                     if etype == "error" or etype.endswith(".failed"):
-                        yield _frame(
-                            {
-                                "type": "error",
-                                "content": str(event.get("error") or event),
-                            }
-                        )
+                        err_payload = event.get("error") or event
+                        log.warning("hosted upstream error: %s", err_payload)
+                        yield {
+                            "type": "error",
+                            "content": _humanize_hosted_error(err_payload),
+                        }
                         return
     except httpx.HTTPError as exc:
         log.exception("hosted-agent proxy http error")
-        yield _frame({"type": "error", "content": f"hosted proxy: {exc}"})
+        yield {"type": "error", "content": f"hosted proxy: {exc}"}
         return
     except Exception as exc:  # noqa: BLE001
         log.exception("hosted-agent proxy error")
-        yield _frame({"type": "error", "content": str(exc)})
+        yield {"type": "error", "content": str(exc)}
         return
     finally:
         try:
@@ -579,4 +615,26 @@ async def _stream_hosted(request: ChatRequest, conversation_id: str):
 
     final_agent = _AGENT_NAME_MAP.get(last_speaker, "BrokerAgent")
     log.info("hosted proxy done final_agent=%s", final_agent)
-    yield _frame({"type": "done", "agent": final_agent, "suggestions": []})
+    yield {"type": "done", "agent": final_agent, "suggestions": []}
+
+
+def _humanize_hosted_error(err: Any) -> str:
+    """Turn a Foundry error payload into a short, demo-safe message."""
+    try:
+        if isinstance(err, dict):
+            code = str(err.get("code") or err.get("error", {}).get("code") or "").lower()
+            msg = (
+                err.get("message")
+                or err.get("error", {}).get("message")
+                or ""
+            )
+            if code in {"server_error", "rate_limit_exceeded", "429"}:
+                return (
+                    "The model is briefly throttled (gpt-5 TPM). "
+                    "Please send the question again."
+                )
+            if msg:
+                return f"Agent error: {msg}"
+    except Exception:  # noqa: BLE001
+        pass
+    return f"Agent error: {err}"

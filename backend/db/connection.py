@@ -133,6 +133,13 @@ if IS_AZURE_SQL:
     _odbc_dsn = _build_odbc_connection_string(DATABASE_URL)
     if _odbc_dsn:
         engine_kwargs["connect_args"] = {"dsn": _odbc_dsn}
+    # Default pool (5 + 10 overflow) is too small for the React UI's
+    # multi-panel polling; bump and recycle to avoid stale Azure SQL conns.
+    engine_kwargs.setdefault("pool_size", int(os.getenv("DB_POOL_SIZE", "20")))
+    engine_kwargs.setdefault("max_overflow", int(os.getenv("DB_MAX_OVERFLOW", "40")))
+    engine_kwargs.setdefault("pool_timeout", int(os.getenv("DB_POOL_TIMEOUT", "30")))
+    engine_kwargs.setdefault("pool_recycle", int(os.getenv("DB_POOL_RECYCLE", "1800")))
+    engine_kwargs.setdefault("pool_pre_ping", True)
     engine = create_async_engine(DATABASE_URL, **engine_kwargs)
     master_engine = engine  # same engine, different schema in the models
 

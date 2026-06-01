@@ -354,14 +354,29 @@ async def get_policy_details(policy_id: str) -> Dict[str, Any]:
 
 
 async def get_renewals_by_urgency(
-    urgency: Optional[str] = None, days_ahead: int = 90
+    urgency: Optional[str] = None, days_ahead: int = 30, limit: int = 25
 ) -> Dict[str, Any]:
     """Get upcoming policy renewals with priority scores, optionally
-    filtered by urgency level (critical, high, medium, low)."""
+    filtered by urgency level (critical, high, medium, low). Returns the
+    top `limit` renewals (default 25) sorted by priority score; the
+    summary counts still reflect every policy in the time window."""
     try:
         days_ahead = int(days_ahead)
     except (TypeError, ValueError):
-        days_ahead = 90
+        days_ahead = 30
+    if days_ahead <= 0:
+        days_ahead = 30
+    if days_ahead > 365:
+        days_ahead = 365
+
+    try:
+        limit = int(limit)
+    except (TypeError, ValueError):
+        limit = 25
+    if limit <= 0:
+        limit = 25
+    if limit > 100:
+        limit = 100
 
     urgency_norm: Optional[str] = None
     if urgency and str(urgency).lower() not in ("none", "null", ""):
@@ -418,8 +433,16 @@ async def get_renewals_by_urgency(
         })
 
     renewals.sort(key=lambda x: x["priority_score"], reverse=True)
+    total_matched = len(renewals)
+    truncated = total_matched > limit
+    if truncated:
+        renewals = renewals[:limit]
     return {
-        "total_renewals": len(renewals),
+        "total_renewals": total_matched,
+        "returned_count": len(renewals),
+        "truncated": truncated,
+        "limit": limit,
+        "days_ahead": days_ahead,
         "critical_count": counts["critical"],
         "high_count": counts["high"],
         "medium_count": counts["medium"],

@@ -7,3 +7,6 @@ aiosqlite>=0.19.0
 python-dotenv>=1.0.0
 # Azure SQL parity (matches backend)
 aioodbc>=0.5.0
+
+# Azure Monitor OpenTelemetry distro — auto-instruments ASGI + SQLAlchemy
+azure-monitor-opentelemetry>=1.6.0

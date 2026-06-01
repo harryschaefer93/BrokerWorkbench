@@ -32,6 +32,9 @@ param acrName string = 'acrbrokerworkbenchdevwnwtqzj2xcdts'
 @description('Name of the existing Container App Environment')
 param containerAppEnvName string = 'cae-brokerworkbench-dev'
 
+@description('Name of the existing Application Insights component (for telemetry)')
+param appInsightsName string = 'appi-brokerworkbench-dev'
+
 @description('FQDN of the existing backend Container App')
 param backendFqdn string = 'ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io'
 
@@ -65,6 +68,13 @@ resource acr 'Microsoft.ContainerRegistry/registries@2023-07-01' existing = {
 // Existing Container App Environment shared with frontend/backend
 resource containerAppEnv 'Microsoft.App/managedEnvironments@2024-03-01' existing = {
   name: containerAppEnvName
+}
+
+// Existing Application Insights component — wired via plain env var (the
+// connection string is not a true secret; it carries an instrumentation key
+// already in our managed environment).
+resource appInsights 'Microsoft.Insights/components@2020-02-02' existing = {
+  name: appInsightsName
 }
 
 // ── 1. User-Assigned Managed Identity ────────────────────────────────────────
@@ -186,6 +196,10 @@ resource botContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             {
               name: 'BOT_PORT'
               value: '3978'
+            }
+            {
+              name: 'APPLICATIONINSIGHTS_CONNECTION_STRING'
+              value: appInsights.properties.ConnectionString
             }
           ]
           probes: [

@@ -6,6 +6,30 @@ Endpoints:
   GET  /health        — Health check
 """
 
+import logging
+import os
+
+# ─── Azure Monitor / OpenTelemetry ─────────────────────────────────────────
+_ai_conn = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
+_ai_enabled = False
+if _ai_conn:
+    os.environ.setdefault("OTEL_SERVICE_NAME", "bot")
+    try:
+        from azure.monitor.opentelemetry import configure_azure_monitor
+        configure_azure_monitor(connection_string=_ai_conn)
+        _ai_enabled = True
+        logging.getLogger(__name__).warning(
+            "AZMON_INIT_OK service=%s", os.environ["OTEL_SERVICE_NAME"]
+        )
+        try:
+            from opentelemetry.instrumentation.aiohttp_server import AioHttpServerInstrumentor
+            AioHttpServerInstrumentor().instrument()
+            logging.getLogger(__name__).warning("AZMON_AIOHTTP_SERVER_OK")
+        except Exception as exc2:  # noqa: BLE001
+            logging.getLogger(__name__).warning("AZMON_AIOHTTP_SERVER_FAIL: %s", exc2)
+    except Exception as exc:  # noqa: BLE001 — telemetry must never break startup
+        logging.getLogger(__name__).warning("AZMON_INIT_FAIL: %s", exc)
+
 from aiohttp import web
 from botbuilder.core import TurnContext
 from botbuilder.core.cloud_adapter_base import CloudAdapterBase

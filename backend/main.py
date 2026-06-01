@@ -11,6 +11,7 @@ FastAPI backend providing:
 Run with: uvicorn main:app --reload
 Docs available at: http://localhost:8000/docs
 """
+import logging
 import os
 
 from fastapi import FastAPI
@@ -22,6 +23,21 @@ from routers import policies_v2, clients_v2, carriers_v2, renewals_v2
 
 # AI Agent handoff router — Microsoft Agent Framework HandoffBuilder over MCP tools
 from routers import agents_handoff
+
+# ─── Azure Monitor / OpenTelemetry ─────────────────────────────────────────
+_ai_conn = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
+_ai_enabled = False
+if _ai_conn:
+    os.environ.setdefault("OTEL_SERVICE_NAME", "backend")
+    try:
+        from azure.monitor.opentelemetry import configure_azure_monitor
+        configure_azure_monitor(connection_string=_ai_conn)
+        _ai_enabled = True
+        logging.getLogger(__name__).warning(
+            "AZMON_INIT_OK service=%s", os.environ["OTEL_SERVICE_NAME"]
+        )
+    except Exception as exc:  # noqa: BLE001 — telemetry must never break startup
+        logging.getLogger(__name__).warning("AZMON_INIT_FAIL: %s", exc)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -48,6 +64,17 @@ Backend API for the Insurance Broker Workbench - Strategic Non-Accelerate 3 Hack
     redoc_url="/redoc",
     redirect_slashes=False,
 )
+
+# Explicit FastAPI instrumentation — auto-detect via configure_azure_monitor
+# only patches future FastAPI instances reliably when entry-point load order
+# aligns; instrumenting the live app instance is always safe.
+if _ai_enabled:
+    try:
+        from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
+        FastAPIInstrumentor.instrument_app(app)
+        logging.getLogger(__name__).warning("AZMON_FASTAPI_OK")
+    except Exception as exc:  # noqa: BLE001
+        logging.getLogger(__name__).warning("AZMON_FASTAPI_FAIL: %s", exc)
 
 # Configure CORS — restrict origins in production, allow all in dev
 _cors_origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "")

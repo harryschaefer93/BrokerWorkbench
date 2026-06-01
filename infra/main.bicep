@@ -564,6 +564,7 @@ resource mcpContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'DATABASE_URL', secretRef: 'sql-connection-string' }
             { name: 'ENVIRONMENT', value: environment }
             { name: 'AZURE_CLIENT_ID', value: mcpIdentity.properties.clientId }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
           ]
         }
       ]

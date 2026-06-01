@@ -44,3 +44,11 @@ e2e/
 # OS junk
 .DS_Store
 Thumbs.db
+
+# Large folders never needed when building backend/MCP/bot from repo root.
+# (Frontend image uses frontend-react/ as its own build context, so this
+# root-level exclusion does not affect it.)
+frontend-react/
+scratch/
+*.tar.gz
+
