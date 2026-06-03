@@ -73,27 +73,48 @@ def _build_chat_client():
 
 
 async def _build_workflow_agent():
-    """Build the handoff workflow and wrap it as an Agent Framework agent.
+    """Build the hosted-mode agent.
 
-    NOTE: we do NOT enter the MCP context here \u2014 the platform's readiness
-    probe must succeed before any I/O work. The handoff workflow lazily
-    opens MCP per-request (the InstrumentedMCPTool's ``__aenter__`` is
-    called inside ``_stream_handoff`` in the FastAPI backend, and the
-    workflow's tool wrapper handles it transparently in hosted mode too).
-    Eagerly entering MCP at startup blocks the bind on port 8088 and
-    triggers ``session_not_ready`` failures when MCP is unreachable.
+    HOSTED MODE — single-agent (triage only).
+    The previous multi-agent HandoffBuilder workflow emits internal
+    ``request_info`` events on turn completion, which the hosted Foundry
+    Responses server serializes as ``mcp_approval_request`` output items.
+    M365 Copilot's V2 ``ResponseObject`` deserializer rejects those with
+    HTTP 500 ("JSON value could not be converted"). To keep all three
+    surfaces (M365, Teams, Web) on a clean event stream we expose the
+    triage agent directly. The triage prompt already calls MCP tools for
+    renewals / clients / policies, and our handoff-discipline prompt
+    instructs it NOT to invoke handoff tools after answering. Specialists
+    remain in the codebase for legacy ``AGENT_BACKEND_MODE=fastapi`` use
+    only.
+
+    NOTE: we do NOT enter the MCP context here — the platform's readiness
+    probe must succeed before any I/O work. The agent_framework opens
+    MCP lazily per-request via the tool's ``__aenter__``.
     """
-    from agents.foundry.handoff import build_handoff
+    from agents.foundry.specialists.triage import build_triage_agent
+    from agents.foundry.handoff import InstrumentedMCPTool, DEFAULT_MCP_URL
+    import os
 
     chat_client = _build_chat_client()
-    workflow, _mcp_tool, _tool_queue = await build_handoff(chat_client=chat_client)
-    return workflow.as_agent(
+    resolved_url = os.getenv("MCP_SERVER_URL", DEFAULT_MCP_URL)
+    logger.info("Hosted single-agent: MCP server URL=%s", resolved_url)
+
+    mcp_tool = InstrumentedMCPTool(
         name="brokerworkbench",
+        url=resolved_url,
         description=(
-            "Broker workbench multi-agent (Triage \u2192 Claims | Quote | CrossSell) "
-            "backed by the BrokerWorkbench MCP toolbox."
+            "BrokerWorkbench insurance data (clients, policies, claims, carriers)."
         ),
+        approval_mode="never_require",
+        additional_properties={"require_approval": "never"},
     )
+
+    triage = build_triage_agent(chat_client, mcp_tool)
+    # Rename to match the agent's published Foundry/M365 identity.
+    triage.name = "brokerworkbench"
+    return triage
+
 
 
 def main() -> None:
