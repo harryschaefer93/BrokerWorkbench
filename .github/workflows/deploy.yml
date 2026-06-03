@@ -16,7 +16,7 @@ on:
   workflow_dispatch:
     inputs:
       components:
-        description: "Comma-separated list to force-build (backend,frontend,bot,mcp). Empty = path-filter detection."
+        description: "Comma-separated list to force-build (backend,frontend,bot,mcp,hosted_agent). Empty = path-filter detection."
         required: false
         default: ""
 
@@ -49,6 +49,7 @@ jobs:
       frontend: ${{ steps.filter.outputs.frontend || steps.dispatch.outputs.frontend }}
       bot: ${{ steps.filter.outputs.bot || steps.dispatch.outputs.bot }}
       mcp: ${{ steps.filter.outputs.mcp || steps.dispatch.outputs.mcp }}
+      hosted_agent: ${{ steps.filter.outputs.hosted_agent || steps.dispatch.outputs.hosted_agent }}
       tag: ${{ steps.tag.outputs.tag }}
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +68,9 @@ jobs:
               - 'bot/**'
             mcp:
               - 'mcp_server/**'
+            hosted_agent:
+              - 'backend/agents/**'
+              - 'backend/agents/foundry/hosted/Dockerfile'
 
       - name: Manual dispatch overrides
         if: github.event_name == 'workflow_dispatch'
@@ -74,7 +78,7 @@ jobs:
         run: |
           input='${{ github.event.inputs.components }}'
           echo "input='$input'"
-          for c in backend frontend bot mcp; do
+          for c in backend frontend bot mcp hosted_agent; do
             if [[ -z "$input" || ",$input," == *",$c,"* ]]; then
               echo "$c=true" >> "$GITHUB_OUTPUT"
             fi
@@ -195,12 +199,48 @@ jobs:
             --image ${{ env.ACR_LOGIN_SERVER_SC }}/broker-bot:${{ needs.detect.outputs.tag }}
 
   # -------------------------------------------------------------------------
+  # Foundry hosted agent: build the broker-hosted-agent image and publish a
+  # new version of the `brokerworkbench` agent pointing at it. Unlike the
+  # ACA jobs above, the agent runtime lives inside the Foundry project
+  # (not a Container App), so the "deploy" step is a Python call that
+  # creates a new agent version via the AI Projects SDK.
+  # -------------------------------------------------------------------------
+  hosted_agent:
+    needs: detect
+    if: needs.detect.outputs.hosted_agent == 'true'
+    runs-on: ubuntu-latest
+    environment: brokerworkbench-dev
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - uses: azure/login@v2
+        with:
+          client-id: ${{ secrets.AZURE_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+      - name: ACR build hosted agent image
+        run: |
+          az acr build \
+            -r ${{ env.ACR_NAME_SC }} \
+            -t broker-hosted-agent:sc-${{ needs.detect.outputs.tag }} \
+            -t broker-hosted-agent:fieldday \
+            -f backend/agents/foundry/hosted/Dockerfile . --no-logs
+      - name: Install publish deps
+        run: pip install azure-ai-projects azure-identity
+      - name: Publish new Foundry agent version
+        env:
+          HOSTED_AGENT_IMAGE: ${{ env.ACR_LOGIN_SERVER_SC }}/broker-hosted-agent:sc-${{ needs.detect.outputs.tag }}
+        run: python scripts/deploy_hosted_agent.py
+
+  # -------------------------------------------------------------------------
   # Optional smoke verification after deploys. Live tests require the
   # DirectLine secret + SC frontend URL — read at runtime from Azure.
   # -------------------------------------------------------------------------
   verify:
-    needs: [backend, frontend, mcp, bot]
-    if: always() && !cancelled() && (needs.backend.result == 'success' || needs.frontend.result == 'success' || needs.mcp.result == 'success' || needs.bot.result == 'success')
+    needs: [backend, frontend, mcp, bot, hosted_agent]
+    if: always() && !cancelled() && (needs.backend.result == 'success' || needs.frontend.result == 'success' || needs.mcp.result == 'success' || needs.bot.result == 'success' || needs.hosted_agent.result == 'success')
     runs-on: ubuntu-latest
     environment: brokerworkbench-dev
     steps:

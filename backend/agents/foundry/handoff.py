@@ -206,10 +206,6 @@ async def build_handoff(
         .add_handoff(claims, [triage])
         .add_handoff(quote, [triage])
         .add_handoff(crosssell, [triage])
-        .with_autonomous_mode(
-            agents=[triage],
-            prompts={triage.name: AUTONOMOUS_PROMPT},
-        )
         .build()
     )
 

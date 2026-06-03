@@ -25,8 +25,9 @@ PROJECT_ENDPOINT = (
 FOUNDRY_ACCOUNT_ENDPOINT = (
     "https://ai-brokerworkbench-dev-wnwtqz.cognitiveservices.azure.com"
 )
-ACR_IMAGE = (
-    "acrbrokerworkbenchdevwnwtqzj2xcdts.azurecr.io/broker-hosted-agent:sc-v5"
+ACR_IMAGE = os.environ.get(
+    "HOSTED_AGENT_IMAGE",
+    "acrbrokerworkbenchdevwnwtqzj2xcdts.azurecr.io/broker-hosted-agent:sc-v5",
 )
 AGENT_NAME = "brokerworkbench"
 # MCP server now has external ingress (Foundry-managed compute is outside our
