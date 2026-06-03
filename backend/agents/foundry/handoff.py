@@ -209,6 +209,13 @@ async def build_handoff(
         name="brokerworkbench",
         url=resolved_url,
         description="BrokerWorkbench insurance data (clients, policies, claims, carriers).",
+        approval_mode="never_require",
+        # Hosted Foundry treats MCP tools as Responses-API server-side
+        # "hosted MCP" — approval is governed by the tool spec's
+        # require_approval field, not our client-side approval_mode kwarg.
+        # M365 Copilot's V2 ResponseObject deserializer rejects
+        # mcp_approval_request items with a 500.
+        additional_properties={"require_approval": "never"},
     )
     mcp_tool.bind_queue(tool_queue)
 
