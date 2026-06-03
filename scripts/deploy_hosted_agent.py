@@ -78,7 +78,9 @@ def main() -> int:
             image=ACR_IMAGE,
             environment_variables={
                 "AZURE_AI_FOUNDRY_ENDPOINT": FOUNDRY_ACCOUNT_ENDPOINT,
-                "AZURE_AI_MODEL_DEPLOYMENT": "gpt-5",
+                "AZURE_AI_MODEL_DEPLOYMENT": os.environ.get(
+                    "AZURE_AI_MODEL_DEPLOYMENT", "gpt-5-mini"
+                ),
                 "AZURE_AI_API_VERSION": "2025-03-01-preview",
                 "MCP_SERVER_URL": MCP_URL,
                 "LOG_LEVEL": "INFO",
