@@ -105,11 +105,17 @@ async def agent_handoff_stream(
     """Stream the handoff workflow as SSE matching the legacy contract.
 
     Routing mode is selected by ``AGENT_BACKEND_MODE`` env var:
-        ``fastapi`` (default) \u2014 run the workflow in-process via
-            :func:`_stream_handoff`.
-        ``hosted``  \u2014 proxy to a Foundry Hosted-agent ``/responses``
+        ``hosted`` (PROD) — proxy to the Foundry hosted agent ``/responses``
             endpoint via :func:`_stream_hosted`. Requires
-            ``HOSTED_AGENT_ENDPOINT`` to be set.
+            ``HOSTED_AGENT_ENDPOINT`` to be set. This is what all three
+            surfaces (M365 Copilot, Teams, Web) hit in production — the
+            backend is a thin SSE translator; the agent itself lives inside
+            the Foundry project (``broker-hosted-agent`` container).
+        ``fastapi`` (LEGACY / local dev) — run the workflow in-process via
+            :func:`_stream_handoff`. Uses the orchestration code in
+            ``backend/agents/foundry/handoff.py`` directly. NOT a prod path.
+
+    See ``docs/architecture.md`` for the full 3-surface topology.
     """
     conversation_id = x_conversation_id or f"conv-{uuid.uuid4().hex[:12]}"
     mode = os.getenv("AGENT_BACKEND_MODE", "fastapi").strip().lower()

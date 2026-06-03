@@ -39,6 +39,19 @@ if _ai_conn:
     except Exception as exc:  # noqa: BLE001 — telemetry must never break startup
         logging.getLogger(__name__).warning("AZMON_INIT_FAIL: %s", exc)
 
+# ─── Agent backend mode guard ──────────────────────────────────────────────
+# Prod ALWAYS runs `AGENT_BACKEND_MODE=hosted` so the backend is a thin SSE
+# proxy to the Foundry hosted agent (single agent serving all 3 surfaces:
+# M365 Copilot, Teams, Web). Any other value means local-mode legacy code is
+# serving traffic — valid for dev only. See docs/architecture.md.
+_agent_mode = os.getenv("AGENT_BACKEND_MODE", "fastapi").strip().lower()
+if _agent_mode != "hosted":
+    logging.getLogger(__name__).warning(
+        "AGENT_BACKEND_MODE=%s — NOT 'hosted'. Prod expects 'hosted' (proxy "
+        "to Foundry hosted agent). Local-mode legacy orchestration code is "
+        "serving traffic. See docs/architecture.md.", _agent_mode,
+    )
+
 # Initialize FastAPI app
 app = FastAPI(
     title="Insurance Broker Workbench API",

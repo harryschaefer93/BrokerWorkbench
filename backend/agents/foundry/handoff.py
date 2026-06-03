@@ -1,14 +1,35 @@
 """Microsoft Agent Framework HandoffBuilder orchestration for BrokerWorkbench.
 
+===========================================================================
+DUAL-USE MODULE — read before editing.
+===========================================================================
+
+This module is consumed by TWO callers with different runtime characteristics:
+
+1. **Foundry hosted agent image** (`backend/agents/foundry/hosted/main.py`).
+   This is the PRODUCTION path for ALL THREE surfaces (M365 Copilot, Teams,
+   Web). The workflow built here is wrapped via `workflow.as_agent(name=...)`
+   and baked into the `broker-hosted-agent` container that runs inside the
+   Foundry project. Changes here ship to prod via:
+     az acr build ... -f backend/agents/foundry/hosted/Dockerfile .
+     python scripts/deploy_hosted_agent.py    # publishes a new agent version
+
+2. **Legacy local FastAPI mode** (`_stream_handoff` in
+   `backend/routers/agents_handoff.py`, gated by `AGENT_BACKEND_MODE=local`).
+   NOT used in prod — prod backend runs with `AGENT_BACKEND_MODE=hosted`,
+   which makes the backend a thin SSE proxy to the Foundry hosted agent.
+   Kept for local development and as a fallback only.
+
+Topology: see `docs/architecture.md`.
+===========================================================================
+
 Builds a :class:`agent_framework_orchestrations.HandoffBuilder` workflow that
 contains the four BrokerWorkbench specialist agents — Triage (start), Claims,
 Quote, CrossSell — all sharing a single ``MCPStreamableHTTPTool`` pointed at
 the existing local MCP server.
 
 This module returns the :class:`Workflow` together with the MCP tool so the
-caller can manage the ``async with mcp_tool: ...`` lifecycle. No FastAPI
-router rewire, no container packaging, no Foundry deploy — orchestration
-code ONLY (Phase A sub-step 2).
+caller can manage the ``async with mcp_tool: ...`` lifecycle.
 
 API notes (Agent Framework 1.6.0):
     * ``HandoffBuilder`` ships in the separate ``agent-framework-orchestrations``
