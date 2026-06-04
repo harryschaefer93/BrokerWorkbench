@@ -115,6 +115,68 @@ app.include_router(renewals_v2.router)
 app.include_router(agents_handoff.router)
 
 
+# ─── Foundry hosted-agent keepalive ────────────────────────────────────────
+# The hosted Foundry runtime auto-deprovisions session compute after 15 min
+# idle (per https://learn.microsoft.com/azure/foundry/agents/concepts/hosted-agents).
+# Cold-start can exceed the platform's 15s internal timeout → HTTP 500
+# server_error before the request reaches the agent container. Ping every
+# 10 min during business hours to keep at least one warm sandbox available
+# for the M365 / Teams / Web surfaces.
+@app.on_event("startup")
+async def _start_hosted_agent_keepalive() -> None:
+    import asyncio
+    import httpx
+    from azure.identity.aio import DefaultAzureCredential
+
+    endpoint = os.getenv("HOSTED_AGENT_ENDPOINT", "").strip()
+    if not endpoint:
+        logging.getLogger(__name__).info(
+            "KEEPALIVE_SKIP: HOSTED_AGENT_ENDPOINT not set"
+        )
+        return
+
+    interval_seconds = int(os.getenv("HOSTED_AGENT_KEEPALIVE_SECONDS", "600"))
+    log = logging.getLogger(__name__)
+
+    async def _ping_loop() -> None:
+        # Token audience for Foundry agent endpoint.
+        cred = DefaultAzureCredential()
+        await asyncio.sleep(30)  # Let the app finish booting before first ping.
+        while True:
+            try:
+                token = (await cred.get_token("https://ai.azure.com/.default")).token
+                async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, read=60.0)) as client:
+                    r = await client.post(
+                        endpoint,
+                        headers={
+                            "Authorization": f"Bearer {token}",
+                            "Content-Type": "application/json",
+                        },
+                        json={
+                            "model": "brokerworkbench",
+                            "input": "keepalive",
+                            "stream": False,
+                        },
+                    )
+                if r.status_code == 200:
+                    log.info("KEEPALIVE_OK status=200")
+                else:
+                    log.warning(
+                        "KEEPALIVE_NON200 status=%s body=%s",
+                        r.status_code, r.text[:200],
+                    )
+            except Exception as exc:  # noqa: BLE001 — keepalive must never break the app
+                log.warning("KEEPALIVE_FAIL: %s", exc)
+            await asyncio.sleep(interval_seconds)
+
+    asyncio.create_task(_ping_loop())
+    logging.getLogger(__name__).warning(
+        "KEEPALIVE_STARTED endpoint=%s interval=%ss",
+        endpoint.split("?")[0],
+        interval_seconds,
+    )
+
+
 @app.get("/")
 async def root():
     """API root - returns basic info and links to documentation."""
