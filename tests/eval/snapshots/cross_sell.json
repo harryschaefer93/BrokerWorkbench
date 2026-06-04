@@ -1,0 +1,33 @@
+{
+  "answer": "Here\u2019s OakTree Analytics (Tech, CA): active General Liability ($2M) and Commercial Property ($1M). Two high\u2011priority gaps:\n\n- **No cyber liability coverage** \u2014 Tech firm handling client data; ransomware, privacy, and CPRA exposure. Many MSAs require it. Adds first\u2011party breach/ransom costs and third\u2011party liability.\n- **No professional liability (Tech E&O)** \u2014 Covers client financial loss from analytics/model errors, negligence, or contract indemnities. Common requirement on data/analytics MSAs.\n\nGap | Why it matters | Fast-market options\n---|---|---\nCyber Liability | Ransomware, breach response, regulatory fines; frequent contractual requirement | Chubb, AIG (API quotes ~2 hrs)\nProfessional Liability (Tech E&O) | Client economic loss, defense costs, contract indemnities | Chubb, AIG (fast); CNA (slower/manual)\n\nTiming: Property renews 7/8 (38 days) and GL 7/29 (59 days). Recommend quoting Cyber + Tech E&O alongside renewals to package pricing and avoid mid\u2011term adds. I can deliver cyber/E&O indications today from Chubb/AIG if you want to proceed.",
+  "backend": "https://ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io",
+  "expected_agent": "CrossSell",
+  "expected_keywords": [
+    "coverage",
+    "gap",
+    "cross",
+    "liability",
+    "cyber"
+  ],
+  "expected_tools": [
+    "get_coverage_gaps",
+    "get_client_info",
+    "get_client_policies"
+  ],
+  "final_agent_short": "CrossSell",
+  "first_token_s": 46.99,
+  "id": "cross_sell",
+  "prompt": "Find coverage gaps and cross-sell opportunities for CLI002",
+  "routed_to": [
+    "CrossSellAgent"
+  ],
+  "tool_calls": [
+    "get_client_info",
+    "get_client_policies",
+    "get_coverage_gaps",
+    "get_carriers_for_policy_type",
+    "get_carriers_for_policy_type",
+    "request_info"
+  ],
+  "total_s": 50.62
+}

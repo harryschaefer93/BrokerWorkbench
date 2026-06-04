@@ -1,7 +1,11 @@
-botbuilder-core==4.16.2
-botbuilder-integration-aiohttp==4.16.2
+botbuilder-core==4.17.0
+botbuilder-integration-aiohttp==4.17.0
 aiohttp==3.10.5
 httpx==0.28.1
 pydantic==2.10.4
 pydantic-settings==2.7.1
 python-dotenv==1.0.1
+
+# Azure Monitor OpenTelemetry distro — auto-instruments aiohttp + httpx
+azure-monitor-opentelemetry>=1.6.0
+opentelemetry-instrumentation-aiohttp-server>=0.48b0

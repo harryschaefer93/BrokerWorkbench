@@ -26,10 +26,9 @@ class AgentConfig:
     model_deployment: str
     
     # Optional settings
-    api_version: str = "2024-12-01-preview"
-    max_tokens: int = 4096
-    temperature: float = 0.4
-    
+    api_version: str = "2025-03-01-preview"
+    max_completion_tokens: int = 4096
+
     @classmethod
     def from_env(cls) -> "AgentConfig":
         """Load configuration from environment variables."""
@@ -45,9 +44,8 @@ class AgentConfig:
         return cls(
             endpoint=endpoint,
             model_deployment=model,
-            api_version=os.getenv("AZURE_AI_API_VERSION", "2024-12-01-preview"),
-            max_tokens=int(os.getenv("AZURE_AI_MAX_TOKENS", "4096")),
-            temperature=float(os.getenv("AZURE_AI_TEMPERATURE", "0.7")),
+            api_version=os.getenv("AZURE_AI_API_VERSION", "2025-03-01-preview"),
+            max_completion_tokens=int(os.getenv("AZURE_AI_MAX_TOKENS", "4096")),
         )
 
 
@@ -57,17 +55,17 @@ def get_credential():
 
     Credential resolution order (first that succeeds wins):
 
-    1. EnvironmentCredential     — Service principal via AZURE_CLIENT_ID +
+    1. EnvironmentCredential     ΓÇö Service principal via AZURE_CLIENT_ID +
                                    AZURE_TENANT_ID + AZURE_CLIENT_SECRET (or CERT).
                                    Use this for CI pipelines or shared dev SPs.
 
-    2. ManagedIdentityCredential — Used automatically in Azure Container Apps /
+    2. ManagedIdentityCredential ΓÇö Used automatically in Azure Container Apps /
                                    Azure VMs / App Service. The Bicep sets
                                    AZURE_CLIENT_ID to the user-assigned managed
                                    identity's client ID so the correct identity is
                                    selected when multiple are present.
 
-    3. AzureCliCredential        — Local development fallback. Reads the token
+    3. AzureCliCredential        ΓÇö Local development fallback. Reads the token
                                    cache produced by `az login` on the host.
                                    In Docker the cache is mounted to
                                    /home/appuser/.azure and AZURE_CONFIG_DIR is
@@ -91,16 +89,16 @@ def get_credential():
     )
 
     if has_sp_secret:
-        logger.info("Entra auth: AZURE_CLIENT_ID+SECRET set — EnvironmentCredential (SP) is primary.")
+        logger.info("Entra auth: AZURE_CLIENT_ID+SECRET set ΓÇö EnvironmentCredential (SP) is primary.")
     elif client_id:
         logger.info(
-            "Entra auth: AZURE_CLIENT_ID=%s set without SECRET — "
+            "Entra auth: AZURE_CLIENT_ID=%s set without SECRET ΓÇö "
             "ManagedIdentityCredential (user-assigned) is primary (Container Apps path).",
             client_id,
         )
     else:
         logger.info(
-            "Entra auth: no AZURE_CLIENT_ID — AzureCliCredential is primary (local dev path). "
+            "Entra auth: no AZURE_CLIENT_ID ΓÇö AzureCliCredential is primary (local dev path). "
             "Ensure 'az login' was run on the host and ~/.azure is mounted "
             "(AZURE_CONFIG_DIR=%s).",
             os.getenv("AZURE_CONFIG_DIR", "~/.azure (default)"),
@@ -142,11 +140,11 @@ AGENT_CONFIGS = {
 
 IMPORTANT: When the broker mentions a client ID (like CLI001) or client name, ALWAYS start by calling get_client_info and get_client_policies to get their details. Then use that data (industry, policy types, coverage limits) to call compare_carrier_rates for each policy. Do NOT ask the broker for information you can look up yourself.
 
-When conversation history mentions a client, use that client ID — don't ask again.
+When conversation history mentions a client, use that client ID ΓÇö don't ask again.
 
 Use a markdown table when comparing carriers side-by-side. After the table, give your recommendation in 1-2 sentences and flag any coverage gaps worth noting.
 
-Write like a sharp colleague on Slack — direct, no filler. Never use slide-deck formatting, numbered sections, or headers like "Section 1". Keep it under 300 words unless the broker asks for more detail."""
+Write like a sharp colleague on Slack ΓÇö direct, no filler. Never use slide-deck formatting, numbered sections, or headers like "Section 1". Keep it under 300 words unless the broker asks for more detail."""
     },
     
     "cross_sell": {
@@ -156,11 +154,11 @@ Write like a sharp colleague on Slack — direct, no filler. Never use slide-dec
 
 IMPORTANT: When the broker mentions a client ID (like CLI001) or client name, ALWAYS start by calling get_client_info and get_client_policies to get their details. Then call get_coverage_gaps to identify missing coverage. Do NOT ask the broker for information you can look up yourself.
 
-When conversation history mentions a client, use that client ID — don't ask again.
+When conversation history mentions a client, use that client ID ΓÇö don't ask again.
 
-Lead with the most important gap first. Use bold text for urgency — e.g. **No cyber liability coverage** — followed by a brief explanation of why it matters for their industry.
+Lead with the most important gap first. Use bold text for urgency ΓÇö e.g. **No cyber liability coverage** ΓÇö followed by a brief explanation of why it matters for their industry.
 
-Keep responses tight. Use a short table if comparing multiple gaps, otherwise 2-3 short paragraphs max. Write like you're briefing a broker before a client meeting — no corporate fluff, no slide-deck formatting, no numbered sections."""
+Keep responses tight. Use a short table if comparing multiple gaps, otherwise 2-3 short paragraphs max. Write like you're briefing a broker before a client meeting ΓÇö no corporate fluff, no slide-deck formatting, no numbered sections."""
     },
     
     "triage": {
@@ -172,7 +170,23 @@ When asked about claims impact, loss ratios, or how claims affect pricing, defer
 
 For everything else \u2014 renewals, client lookups, policy details, general questions \u2014 answer directly using your tools.
 
-Use markdown tables for data. Be direct and concise, like a sharp colleague briefing you before a meeting. Keep responses under 300 words."""
+Tool-call guidance:
+- For broad "upcoming renewals" or "what's renewing" prompts (no client, no date), call get_renewals_by_urgency with urgency="critical" and days_ahead=30 (defaults are fine — do NOT widen the window or remove the urgency filter on vague prompts).
+- The renewals tool returns the top 25 by priority by default and includes summary counts for the whole window; surface the counts in your summary, then list the top items.
+
+Formatting rules (CRITICAL — M365 Copilot does NOT render markdown tables; pipes appear as literal text):
+- DO NOT use markdown tables (no `|`-separated rows, no `---` header separators) for ANY list of renewals, policies, clients, or quotes. Render lists as bullets instead.
+- For each renewal, use this bullet format:
+  - **<Client Name>** — <Policy Type> · <Carrier> · expires <YYYY-MM-DD> (<N> days) · $<premium> · `<Policy ID>`
+- Lead with a short summary (counts + total premium at risk), then a "Do today" section for items expiring in ≤1 day (bold the client name + action verb), then the prioritized bullet list (top 10 max unless the user asks for more).
+- Use bold sparingly for the single most important fact in each section. Avoid headers like "Recommendations" or "Next Steps" — write like a colleague briefing you.
+- Keep responses under 300 words.
+
+IMPORTANT — handoff discipline:
+- If you have already produced a complete answer using your own MCP tools (e.g., get_renewals_by_urgency, get_client_details, etc.), STOP. Do NOT call any handoff_to_* tool. Your turn is done.
+- Only call a handoff_to_* tool when (a) you have NOT yet produced an answer, AND (b) the user's request clearly falls in another specialist's scope (Quote = comparing quotes / market rates; Claims = open claims / loss runs; CrossSell = upsell opportunities).
+- Never call a handoff_to_* tool with empty arguments — if you must hand off, pass the user's question verbatim in a "context" or equivalent argument.
+- A handoff is a routing decision, not a closing flourish."""
     },
 
     "claims_impact": {
@@ -181,16 +195,16 @@ Use markdown tables for data. Be direct and concise, like a sharp colleague brie
         "instructions": """You are a claims and renewal pricing analyst for an insurance brokerage. Use your tools to pull real data, then respond to EXACTLY what the broker asked.
 
 Match your response to the question:
-- "claims impact" or "premium impact" → Lead with expected premium impact %, then explain what's driving it (frequency, severity, loss ratio). End with 2-3 actions to improve.
-- "claims history" → Show the actual claims data: year-by-year breakdown with claim counts, amounts, and loss ratios. Use a markdown table.
-- "loss ratio trend" → Use the get_loss_ratio_trend tool. Present the year-over-year trend with a markdown table showing each year's loss ratio. State whether it's improving, worsening, or stable.
-- "renewal" questions → Use get_renewals_by_urgency. Present as a timeline sorted by date.
-- "policy" questions → Show the client's policies with key details.
+- "claims impact" or "premium impact" ΓåÆ Lead with expected premium impact %, then explain what's driving it (frequency, severity, loss ratio). End with 2-3 actions to improve.
+- "claims history" ΓåÆ Show the actual claims data: year-by-year breakdown with claim counts, amounts, and loss ratios. Use a markdown table.
+- "loss ratio trend" ΓåÆ Use the get_loss_ratio_trend tool. Present the year-over-year trend with a markdown table showing each year's loss ratio. State whether it's improving, worsening, or stable.
+- "renewal" questions ΓåÆ Use get_renewals_by_urgency. Present as a timeline sorted by date.
+- "policy" questions ΓåÆ Show the client's policies with key details.
 
-CRITICAL: Answer what was asked. If they ask for claims history, show the history data — don't pivot to premium impact. If they ask for a trend, show the trend — don't summarize into a single number.
+CRITICAL: Answer what was asked. If they ask for claims history, show the history data ΓÇö don't pivot to premium impact. If they ask for a trend, show the trend ΓÇö don't summarize into a single number.
 
 Always trust the data your tools return. Never say "technical issue" or "unable to access data" when a tool returns valid results.
 
-Keep it under 250 words. Use bold for key numbers. Use a markdown table for data. Write conversationally — like you're briefing a colleague, not presenting to a board. No slide decks, no numbered sections, no headers like "Recommendations" or "Next Steps"."""
+Keep it under 250 words. Use bold for key numbers. Use a markdown table for data. Write conversationally ΓÇö like you're briefing a colleague, not presenting to a board. No slide decks, no numbered sections, no headers like "Recommendations" or "Next Steps"."""
     }
 }

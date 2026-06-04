@@ -39,6 +39,11 @@ COPY . .
 
 # Create non-root user for security
 RUN useradd --create-home appuser && chown -R appuser:appuser /app
+
+# Pre-create /app/data with appuser ownership so the named volume from
+# docker-compose (broker_db:/app/data) is writable on first boot.
+RUN mkdir -p /app/data && chown -R appuser:appuser /app/data
+
 USER appuser
 
 # Expose port 8000

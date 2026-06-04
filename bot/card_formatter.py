@@ -154,6 +154,7 @@ class CardFormatter:
 
     def format_error_card(self, error_msg: str) -> dict:
         """Error card with red accent and retry suggestion."""
+        safe_msg = self._sanitize_error_message(error_msg)
         body: list[dict] = [
             {
                 "type": "Container",
@@ -168,7 +169,7 @@ class CardFormatter:
                     },
                     {
                         "type": "TextBlock",
-                        "text": error_msg[:500],
+                        "text": safe_msg,
                         "wrap": True,
                         "isSubtle": True,
                     },
@@ -178,12 +179,26 @@ class CardFormatter:
         actions = [
             {
                 "type": "Action.Submit",
-                "title": "Show upcoming renewals",
-                "data": {"message": "Show upcoming renewals"},
+                "title": "Try again",
+                "data": {"message": "Show critical renewals this week"},
                 "style": "positive",
             }
         ]
         return self._wrap_card(body, actions)
+
+    @staticmethod
+    def _sanitize_error_message(error_msg: str) -> str:
+        """Hide raw dict / JSON dumps from the user; show a friendly fallback."""
+        msg = (error_msg or "").strip()
+        if not msg:
+            return "The agent ran into an issue. Please try the question again."
+        # Anything that looks like a Python dict / JSON payload is too noisy.
+        if msg.startswith("{") or "'response'" in msg or '"response"' in msg or "agent_session_id" in msg:
+            return (
+                "The model is briefly throttled. Please send the question again "
+                "\u2014 it usually succeeds on the next try."
+            )
+        return msg[:300]
 
     def format_reset_card(self) -> dict:
         """Card confirming conversation has been cleared."""

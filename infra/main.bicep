@@ -28,6 +28,9 @@ param frontendContainerImage string
 @description('Container image for the backend (FastAPI)')
 param backendContainerImage string
 
+@description('Container image for the MCP server (internal-only)')
+param mcpContainerImage string
+
 @description('Additional tags required by your organization (e.g. cost center, owner)')
 param extraTags object = {}
 
@@ -37,16 +40,19 @@ param aiFoundryName string = ''
 @description('Name for the AI Foundry project (child of the Foundry account)')
 param aiProjectName string = '${baseName}-agents'
 
-@description('OpenAI model to deploy in the Foundry account')
-param aiModelDeploymentName string = 'gpt-4.1'
+@description('Deployment name for gpt-5 on the Foundry account')
+param gpt5DeploymentName string = 'gpt-5'
 
-@description('OpenAI model name to deploy')
-param aiModelName string = 'gpt-4.1'
+@description('Deployment name for gpt-5-mini on the Foundry account')
+param gpt5MiniDeploymentName string = 'gpt-5-mini'
 
-@description('OpenAI model version')
-param aiModelVersion string = '2025-04-14'
+@description('TPM capacity (in thousands) for gpt-5 GlobalStandard deployment')
+param gpt5Capacity int = 50
 
-@description('Skip model deployment (use when subscription lacks quota — deploy model via portal instead)')
+@description('TPM capacity (in thousands) for gpt-5-mini GlobalStandard deployment')
+param gpt5MiniCapacity int = 50
+
+@description('Skip model deployments (use when subscription lacks quota — deploy models via portal instead)')
 param skipModelDeployment bool = false
 
 // Variables
@@ -61,6 +67,7 @@ var tags = union({
 var containerAppEnvName = 'cae-${resourceSuffix}'
 var frontendAppName = 'ca-frontend-${resourceSuffix}'
 var backendAppName = 'ca-backend-${resourceSuffix}'
+var mcpAppName = 'ca-mcp-${resourceSuffix}'
 var sqlServerName = 'sql-${resourceSuffix}-${uniqueSuffix}'
 var sqlDatabaseName = 'sqldb-${resourceSuffix}'
 var appInsightsName = 'appi-${resourceSuffix}'
@@ -215,20 +222,40 @@ resource aiProject 'Microsoft.CognitiveServices/accounts/projects@2025-04-01-pre
   }
 }
 
-resource aiModelDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (!skipModelDeployment) {
+resource gpt5Deployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (!skipModelDeployment) {
   parent: aiFoundry
-  name: aiModelDeploymentName
+  name: gpt5DeploymentName
   sku: {
-    capacity: 1
     name: 'GlobalStandard'
+    capacity: gpt5Capacity
   }
   properties: {
     model: {
-      name: aiModelName
+      name: 'gpt-5'
       format: 'OpenAI'
-      version: aiModelVersion
+      version: '2025-08-07'
     }
   }
+}
+
+resource gpt5MiniDeployment 'Microsoft.CognitiveServices/accounts/deployments@2025-04-01-preview' = if (!skipModelDeployment) {
+  parent: aiFoundry
+  name: gpt5MiniDeploymentName
+  sku: {
+    name: 'GlobalStandard'
+    capacity: gpt5MiniCapacity
+  }
+  properties: {
+    model: {
+      name: 'gpt-5-mini'
+      format: 'OpenAI'
+      version: '2025-08-07'
+    }
+  }
+  // Serialize per-account deployments to avoid CognitiveServices throttling
+  dependsOn: [
+    gpt5Deployment
+  ]
 }
 
 // User-Assigned Managed Identity (created before container apps so RBAC can propagate)
@@ -241,6 +268,12 @@ resource backendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-
 
 resource frontendIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
   name: 'id-frontend-${resourceSuffix}'
+  location: location
+  tags: tags
+}
+
+resource mcpIdentity 'Microsoft.ManagedIdentity/userAssignedIdentities@2023-01-31' = {
+  name: 'id-mcp-${resourceSuffix}'
   location: location
   tags: tags
 }
@@ -269,6 +302,18 @@ resource acrPullFrontend 'Microsoft.Authorization/roleAssignments@2022-04-01' = 
   }
 }
 
+// RBAC: MCP identity gets AcrPull on ACR
+
+resource acrPullMcp 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(acr.id, mcpIdentity.id, 'acrpull')
+  scope: acr
+  properties: {
+    principalId: mcpIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '7f951dda-4ed3-4680-a7ca-43fe172d538d')
+  }
+}
+
 // RBAC: Backend identity gets Key Vault Secrets User
 
 resource kvSecretsUserBackend 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
@@ -276,6 +321,18 @@ resource kvSecretsUserBackend 'Microsoft.Authorization/roleAssignments@2022-04-0
   scope: keyVault
   properties: {
     principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
+  }
+}
+
+// RBAC: MCP identity gets Key Vault Secrets User (shares sql-connection-string)
+
+resource kvSecretsUserMcp 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(keyVault.id, mcpIdentity.id, 'kvsecrets')
+  scope: keyVault
+  properties: {
+    principalId: mcpIdentity.properties.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '4633458b-17de-408a-b874-0445c86b69e6')
   }
@@ -303,6 +360,20 @@ resource aiUserProject 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
     principalId: aiProject.identity.principalId
     principalType: 'ServicePrincipal'
     roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '53ca6127-db72-4b80-b1b0-d745d6d5456d')
+  }
+}
+
+// RBAC: Backend identity gets Cognitive Services OpenAI User on the Foundry account
+// Role: Cognitive Services OpenAI User (5e0bd9bd-7b93-4f28-af87-19fc36ad61bd)
+// MCP is not granted — it does not call OpenAI/LLM endpoints
+
+resource openAiUserBackend 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
+  name: guid(aiFoundry.id, backendIdentity.id, '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
+  scope: aiFoundry
+  properties: {
+    principalId: backendIdentity.properties.principalId
+    principalType: 'ServicePrincipal'
+    roleDefinitionId: subscriptionResourceId('Microsoft.Authorization/roleDefinitions', '5e0bd9bd-7b93-4f28-af87-19fc36ad61bd')
   }
 }
 
@@ -421,7 +492,9 @@ resource backendContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             { name: 'AZURE_CLIENT_ID', value: backendIdentity.properties.clientId }
             { name: 'AZURE_AI_FOUNDRY_PROJECT_CONNECTION_STRING', value: '${aiFoundry.properties.endpoint}/api/projects/${aiProjectName}' }
             { name: 'AZURE_AI_FOUNDRY_ENDPOINT', value: aiFoundry.properties.endpoint }
-            { name: 'AZURE_AI_MODEL_DEPLOYMENT', value: aiModelDeploymentName }
+            { name: 'AZURE_AI_MODEL_DEPLOYMENT', value: gpt5DeploymentName }
+            { name: 'AZURE_AI_MODEL_DEPLOYMENT_MINI', value: gpt5MiniDeploymentName }
+            { name: 'MCP_SERVER_URL', value: 'https://${mcpContainerApp.properties.configuration.ingress.fqdn}/mcp' }
           ]
         }
       ]
@@ -434,6 +507,70 @@ resource backendContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
             http: { metadata: { concurrentRequests: '10' } }
           }
         ]
+      }
+    }
+  }
+}
+
+// MCP Server Container App (internal-only, MI-only auth)
+
+resource mcpContainerApp 'Microsoft.App/containerApps@2024-03-01' = {
+  name: mcpAppName
+  location: location
+  tags: union(tags, { component: 'mcp' })
+  identity: {
+    type: 'UserAssigned'
+    userAssignedIdentities: {
+      '${mcpIdentity.id}': {}
+    }
+  }
+  dependsOn: [
+    acrPullMcp
+    kvSecretsUserMcp
+  ]
+  properties: {
+    managedEnvironmentId: containerAppEnvironment.id
+    configuration: {
+      registries: [
+        {
+          server: acr.properties.loginServer
+          identity: mcpIdentity.id
+        }
+      ]
+      ingress: {
+        external: false
+        targetPort: 8001
+        transport: 'http'
+        allowInsecure: false
+      }
+      secrets: [
+        {
+          name: 'sql-connection-string'
+          keyVaultUrl: kvSecretSqlConn.properties.secretUri
+          identity: mcpIdentity.id
+        }
+      ]
+    }
+    template: {
+      containers: [
+        {
+          name: 'mcp'
+          image: mcpContainerImage
+          resources: {
+            cpu: json('0.5')
+            memory: '1Gi'
+          }
+          env: [
+            { name: 'DATABASE_URL', secretRef: 'sql-connection-string' }
+            { name: 'ENVIRONMENT', value: environment }
+            { name: 'AZURE_CLIENT_ID', value: mcpIdentity.properties.clientId }
+            { name: 'APPLICATIONINSIGHTS_CONNECTION_STRING', value: appInsights.properties.ConnectionString }
+          ]
+        }
+      ]
+      scale: {
+        minReplicas: 1
+        maxReplicas: 1
       }
     }
   }
@@ -630,6 +767,9 @@ output frontendUrl string = 'https://${frontendContainerApp.properties.configura
 @description('Backend API Container App URL')
 output backendUrl string = 'https://${backendContainerApp.properties.configuration.ingress.fqdn}'
 
+@description('MCP server Container App FQDN (internal-only)')
+output mcpFqdn string = mcpContainerApp.properties.configuration.ingress.fqdn
+
 @description('SQL Server fully qualified domain name')
 output sqlServerFqdn string = sqlServer.properties.fullyQualifiedDomainName
 
@@ -648,11 +788,18 @@ output aiFoundryEndpoint string = aiFoundry.properties.endpoint
 @description('Azure AI Foundry project endpoint (for SDK connection)')
 output aiFoundryProjectEndpoint string = '${aiFoundry.properties.endpoint}/api/projects/${aiProjectName}'
 
+@description('Deployment name for gpt-5 on the Foundry account')
+output gpt5DeploymentNameOut string = gpt5DeploymentName
+
+@description('Deployment name for gpt-5-mini on the Foundry account')
+output gpt5MiniDeploymentNameOut string = gpt5MiniDeploymentName
+
 @description('Resource names for reference')
 output resourceNames object = {
   containerAppEnvironment: containerAppEnvironment.name
   frontendApp: frontendContainerApp.name
   backendApp: backendContainerApp.name
+  mcpApp: mcpContainerApp.name
   sqlServer: sqlServer.name
   sqlDatabase: sqlDatabase.name
   appInsights: appInsights.name
