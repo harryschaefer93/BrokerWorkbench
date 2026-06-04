@@ -164,7 +164,7 @@ jobs:
             -r ${{ env.ACR_NAME_SC }} \
             -t broker-mcp:${{ needs.detect.outputs.tag }} \
             -t broker-mcp:fieldday \
-            -f mcp_server/Dockerfile mcp_server/ --no-logs
+            -f mcp_server/Dockerfile . --no-logs
       - name: Update MCP Container App (SC)
         run: |
           az containerapp update \
@@ -228,7 +228,7 @@ jobs:
             -t broker-hosted-agent:fieldday \
             -f backend/agents/foundry/hosted/Dockerfile . --no-logs
       - name: Install publish deps
-        run: pip install azure-ai-projects azure-identity
+        run: pip install "azure-ai-projects==2.1.0" azure-identity
       - name: Publish new Foundry agent version
         env:
           HOSTED_AGENT_IMAGE: ${{ env.ACR_LOGIN_SERVER_SC }}/broker-hosted-agent:sc-${{ needs.detect.outputs.tag }}
