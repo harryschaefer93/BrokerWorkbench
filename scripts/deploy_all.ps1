@@ -6,7 +6,7 @@
 #   2. Cloud-builds the bot image (az acr build - no local Docker needed)
 #      and rolls the bot Container App.
 #   3. Cloud-builds the hosted-agent image and publishes a new Foundry
-#      hosted-agent version (with AGENT_REASONING_EFFORT=low baked in).
+#      hosted-agent version (with REASONING_EFFORT=low baked in).
 #
 # What this CANNOT do (Microsoft platform boundary): install / sideload the
 # Teams app package into M365 Copilot for a user. That stays manual (see

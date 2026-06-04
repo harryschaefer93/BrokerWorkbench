@@ -31,8 +31,9 @@ spec:
       value: 2025-03-01-preview
     # Cap gpt-5 reasoning effort for interactive latency (minimal|low|medium|
     # high, or "default" to use the model default). "low" balances latency
-    # against sound MCP tool-call decisions.
-    - name: AGENT_REASONING_EFFORT
+    # against sound MCP tool-call decisions. Name must avoid the reserved
+    # AGENT_/FOUNDRY_ prefixes (Foundry rejects those on hosted agents).
+    - name: REASONING_EFFORT
       value: low
     # MCP server inside the same Container Apps env / VNet.
     - name: MCP_SERVER_URL

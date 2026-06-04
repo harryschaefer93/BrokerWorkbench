@@ -44,13 +44,16 @@ _VALID_REASONING_EFFORTS = {"minimal", "low", "medium", "high"}
 def _reasoning_options() -> dict:
     """Return Agent ``default_options`` for the configured reasoning effort.
 
-    Controlled by ``AGENT_REASONING_EFFORT`` (default ``low``). Set to
+    Controlled by ``REASONING_EFFORT`` (default ``low``). Set to
     ``default`` (or any unrecognized value) to omit the option entirely and
     fall back to the model/SDK default.
+
+    Note: the var must NOT start with ``AGENT_`` or ``FOUNDRY_`` — Foundry
+    reserves those prefixes and rejects hosted-agent versions that set them.
     """
-    effort = os.getenv("AGENT_REASONING_EFFORT", "low").strip().lower()
+    effort = os.getenv("REASONING_EFFORT", "low").strip().lower()
     if effort not in _VALID_REASONING_EFFORTS:
-        logger.info("AGENT_REASONING_EFFORT=%s -> using model default", effort)
+        logger.info("REASONING_EFFORT=%s -> using model default", effort)
         return {}
     logger.info("Hosted agent reasoning effort capped at '%s'", effort)
     return {"reasoning": {"effort": effort}}

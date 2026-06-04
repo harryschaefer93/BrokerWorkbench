@@ -85,8 +85,8 @@ def main() -> int:
                 "MCP_SERVER_URL": MCP_URL,
                 # Caps gpt-5 reasoning depth so M365 Copilot turns stay fast.
                 # See backend/agents/foundry/hosted/main.py:_reasoning_options.
-                "AGENT_REASONING_EFFORT": os.environ.get(
-                    "AGENT_REASONING_EFFORT", "low"
+                "REASONING_EFFORT": os.environ.get(
+                    "REASONING_EFFORT", "low"
                 ),
                 "LOG_LEVEL": "INFO",
             },

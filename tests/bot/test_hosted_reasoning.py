@@ -13,35 +13,35 @@ import agents.foundry.hosted.main as hosted_main
 
 
 def test_default_effort_is_low(monkeypatch):
-    monkeypatch.delenv("AGENT_REASONING_EFFORT", raising=False)
+    monkeypatch.delenv("REASONING_EFFORT", raising=False)
     assert hosted_main._reasoning_options() == {"reasoning": {"effort": "low"}}
 
 
 @pytest.mark.parametrize("effort", ["minimal", "low", "medium", "high"])
 def test_valid_efforts_are_passed_through(monkeypatch, effort):
-    monkeypatch.setenv("AGENT_REASONING_EFFORT", effort)
+    monkeypatch.setenv("REASONING_EFFORT", effort)
     assert hosted_main._reasoning_options() == {"reasoning": {"effort": effort}}
 
 
 @pytest.mark.parametrize("effort", ["default", "", "bogus", "LOWEST"])
 def test_invalid_effort_falls_back_to_model_default(monkeypatch, effort):
-    monkeypatch.setenv("AGENT_REASONING_EFFORT", effort)
+    monkeypatch.setenv("REASONING_EFFORT", effort)
     assert hosted_main._reasoning_options() == {}
 
 
 def test_effort_is_case_insensitive(monkeypatch):
-    monkeypatch.setenv("AGENT_REASONING_EFFORT", "LOW")
+    monkeypatch.setenv("REASONING_EFFORT", "LOW")
     assert hosted_main._reasoning_options() == {"reasoning": {"effort": "low"}}
 
 
 async def test_build_workflow_agent_wires_reasoning(monkeypatch):
     """The constructed hosted Agent carries the reasoning option."""
-    monkeypatch.setenv("AGENT_REASONING_EFFORT", "low")
+    monkeypatch.setenv("REASONING_EFFORT", "low")
     agent = await hosted_main._build_workflow_agent()
     assert agent.default_options.get("reasoning") == {"effort": "low"}
 
 
 async def test_build_workflow_agent_omits_option_on_default(monkeypatch):
-    monkeypatch.setenv("AGENT_REASONING_EFFORT", "default")
+    monkeypatch.setenv("REASONING_EFFORT", "default")
     agent = await hosted_main._build_workflow_agent()
     assert "reasoning" not in (agent.default_options or {})
