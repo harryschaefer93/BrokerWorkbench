@@ -92,8 +92,9 @@ async def _build_workflow_agent():
     probe must succeed before any I/O work. The agent_framework opens
     MCP lazily per-request via the tool's ``__aenter__``.
     """
-    from agents.foundry.specialists.triage import build_triage_agent
+    from agents.config import AGENT_CONFIGS
     from agents.foundry.handoff import InstrumentedMCPTool, DEFAULT_MCP_URL
+    from agent_framework import Agent
     import os
 
     chat_client = _build_chat_client()
@@ -110,10 +111,20 @@ async def _build_workflow_agent():
         additional_properties={"require_approval": "never"},
     )
 
-    triage = build_triage_agent(chat_client, mcp_tool)
-    # Rename to match the agent's published Foundry/M365 identity.
-    triage.name = "brokerworkbench"
-    return triage
+    cfg = AGENT_CONFIGS["triage"]
+    # Build the Agent inline (NOT via build_triage_agent) to avoid:
+    #   - require_per_service_call_history_persistence=True, which is a
+    #     HandoffBuilder-only flag and double-persists with Foundry's
+    #     own storage provider in hosted mode (intermittent HTTP 500s)
+    #   - post-construction `agent.name = ...` mutation which can
+    #     desync conversation-state keys
+    return Agent(
+        chat_client,
+        cfg["instructions"],
+        name="brokerworkbench",
+        description=cfg["description"],
+        tools=mcp_tool,
+    )
 
 
 
