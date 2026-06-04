@@ -83,6 +83,11 @@ def main() -> int:
                 ),
                 "AZURE_AI_API_VERSION": "2025-03-01-preview",
                 "MCP_SERVER_URL": MCP_URL,
+                # Caps gpt-5 reasoning depth so M365 Copilot turns stay fast.
+                # See backend/agents/foundry/hosted/main.py:_reasoning_options.
+                "AGENT_REASONING_EFFORT": os.environ.get(
+                    "AGENT_REASONING_EFFORT", "low"
+                ),
                 "LOG_LEVEL": "INFO",
             },
         ),

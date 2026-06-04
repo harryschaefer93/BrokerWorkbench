@@ -7,19 +7,37 @@ and returns polished Adaptive Cards.
 
 import asyncio
 from collections import defaultdict
-from typing import Any
+from typing import Any, AsyncIterator
 import json
 
 import httpx
 from botbuilder.core import BotAdapter, CardFactory, MessageFactory, TurnContext
 from botbuilder.core.teams import TeamsActivityHandler
-from botbuilder.schema import Activity, ActivityTypes, Attachment, ChannelAccount
+from botbuilder.schema import Attachment, ChannelAccount
 
 from card_formatter import CardFormatter
 from config import Settings
+from streaming import BotStreamer
 
 # Max conversation turns to keep in memory per conversation
 _MAX_HISTORY = 10
+
+# Send a "still working" heartbeat if the backend goes this long without an
+# event, so the M365 Copilot / Teams streaming session never stalls silently.
+_HEARTBEAT_SECONDS = 12.0
+
+# Overall bot-side cap for a single turn. Kept below the platform streaming
+# lifetime (~2 min) so we always emit a final message before it expires.
+_TURN_DEADLINE_SECONDS = 110.0
+
+# Friendly status lines shown while a specialist works. Keyed by the mapped
+# agent name the backend emits in `routing` frames.
+_AGENT_STATUS: dict[str, str] = {
+    "ClaimsImpactAgent": "Analyzing claims history…",
+    "QuoteComparisonAgent": "Comparing carrier quotes…",
+    "CrossSellAgent": "Scanning for coverage gaps…",
+    "BrokerAgent": "Working through your book of business…",
+}
 
 
 class BrokerBot(TeamsActivityHandler):
@@ -33,6 +51,9 @@ class BrokerBot(TeamsActivityHandler):
         self.bot_app_id = settings.microsoft_app_id
         # In-memory conversation history: {conversation_id: [{"role":..., "content":...}]}
         self._history: dict[str, list[dict[str, str]]] = defaultdict(list)
+        # One lock per conversation so a second prompt can't corrupt an
+        # in-flight streaming response (Teams allows one active stream per chat).
+        self._locks: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 
     # ------------------------------------------------------------------
     # Message handling
@@ -53,83 +74,122 @@ class BrokerBot(TeamsActivityHandler):
         if not text:
             return
 
+        conv_id = turn_context.activity.conversation.id
+
         # Reset/clear command
         if text.lower().strip() in ("clear", "/reset", "new conversation", "/clear", "reset"):
-            conv_id = turn_context.activity.conversation.id
             self._history.pop(conv_id, None)
             card_payload = self.formatter.format_reset_card()
             attachment = self._make_attachment(card_payload)
             await turn_context.send_activity(MessageFactory.attachment(attachment))
             return
 
-        conv_id = turn_context.activity.conversation.id
+        # Serialize turns per conversation. If a stream is already running for
+        # this chat, tell the user instead of racing two streams.
+        lock = self._locks[conv_id]
+        if lock.locked():
+            await turn_context.send_activity(
+                MessageFactory.text(
+                    "I'm still working on your previous question — one moment…"
+                )
+            )
+            return
 
-        # Send a typing indicator immediately so the user sees activity while
-        # the Foundry agent works (these calls can take 10–30s).
-        try:
-            await turn_context.send_activity(Activity(type=ActivityTypes.typing))
-        except Exception:
-            pass  # typing is best-effort; never fail the turn over it
+        async with lock:
+            await self._stream_turn(turn_context, text, conv_id)
 
-        # If we have an adapter (production path), do the slow work in a
-        # background task and reply proactively. Otherwise (tests/dev fallback)
-        # run inline and reply in the same turn.
-        if self.adapter is not None:
-            reference = TurnContext.get_conversation_reference(turn_context.activity)
-            asyncio.create_task(self._process_in_background(reference, text, conv_id))
-        else:
-            await self._handle_and_reply(turn_context, text, conv_id)
-
-    async def _handle_and_reply(
+    async def _stream_turn(
         self, turn_context: TurnContext, text: str, conv_id: str
     ) -> None:
-        """Inline path: call backend and reply on the same turn."""
+        """Process one turn inline, streaming progress to the surface.
+
+        Replaces the former fire-and-forget ``continue_conversation`` path
+        (which silently dropped replies on worker recycle). All three surfaces
+        — M365 Copilot, Teams, Web-via-bot — expect the reply on the same
+        invoke turn, with streaming updates so the connector never times out.
+        """
         history = self._history[conv_id]
+        streamer = BotStreamer(turn_context)
+        # Acknowledge immediately (<2s) so the surface shows life.
+        await streamer.update("Looking into that…", force=True)
+
+        agent_name = "BrokerAgent"
+        full_text = ""
+        announced: set[str] = set()
+        deadline = asyncio.get_event_loop().time() + _TURN_DEADLINE_SECONDS
+
         try:
-            agent_name, response_text = await self._call_backend(text, history)
-            self._append_history(conv_id, text, response_text)
+            events = self._iter_backend_events(text, history)
+            # Drive __anext__ via a persistent task so a heartbeat timeout never
+            # cancels an in-flight backend read (which would corrupt the async
+            # generator and silently drop the event it was awaiting).
+            pending: asyncio.Task = asyncio.ensure_future(events.__anext__())
+            try:
+                while True:
+                    remaining = deadline - asyncio.get_event_loop().time()
+                    if remaining <= 0:
+                        raise TimeoutError("turn exceeded bot-side deadline")
+                    done, _ = await asyncio.wait(
+                        {pending}, timeout=min(_HEARTBEAT_SECONDS, remaining)
+                    )
+                    if not done:
+                        # No backend event recently — keep the stream alive.
+                        await streamer.update("Still working on it…", force=True)
+                        continue
+                    try:
+                        event = pending.result()
+                    except StopAsyncIteration:
+                        break
+                    # Schedule the next read before processing this event.
+                    pending = asyncio.ensure_future(events.__anext__())
+
+                    etype = event.get("type")
+                    if etype == "token":
+                        full_text += event.get("content", "")
+                        # Grow the streamed answer bubble (throttled internally).
+                        await streamer.update(full_text, stream_type="streaming")
+                    elif etype == "routing":
+                        if event.get("agent"):
+                            agent_name = event["agent"]
+                            if agent_name not in announced:
+                                announced.add(agent_name)
+                                await streamer.update(
+                                    _AGENT_STATUS.get(agent_name, "Working on it…"),
+                                    force=True,
+                                )
+                    elif etype == "status":
+                        if event.get("content"):
+                            await streamer.update(event["content"])
+                    elif etype == "tool_call":
+                        await streamer.update("Looking up insurance data…")
+                    elif etype == "done":
+                        if event.get("agent"):
+                            agent_name = event["agent"]
+                        if not full_text and event.get("content"):
+                            full_text = event["content"]
+                    elif etype == "error":
+                        raise RuntimeError(event.get("content") or "Agent error")
+            finally:
+                if not pending.done():
+                    pending.cancel()
+                await events.aclose()
+
+            if not full_text:
+                full_text = "No response from backend."
+            self._append_history(conv_id, text, full_text)
             suggestions = self._pick_suggestions(text, agent_name)
             card_payload = self.formatter.format_response(
-                response_text, agent_name, suggestions=suggestions
+                full_text, agent_name, suggestions=suggestions
             )
-            await turn_context.send_activity(
-                MessageFactory.attachment(self._make_attachment(card_payload))
+            await streamer.final(
+                full_text, attachment=self._make_attachment(card_payload)
             )
-        except Exception as exc:
-            card_payload = self.formatter.format_error_card(str(exc))
-            await turn_context.send_activity(
-                MessageFactory.attachment(self._make_attachment(card_payload))
+        except Exception as exc:  # noqa: BLE001 — always surface a final to the user
+            err_card = self.formatter.format_error_card(str(exc))
+            await streamer.final(
+                "Sorry, something went wrong handling that request.",
+                attachment=self._make_attachment(err_card),
             )
-
-    async def _process_in_background(
-        self, reference, text: str, conv_id: str
-    ) -> None:
-        """Proactive path: call backend then send result via continue_conversation."""
-        history = self._history[conv_id]
-
-        async def _callback(ctx: TurnContext) -> None:
-            try:
-                agent_name, response_text = await self._call_backend(text, history)
-                self._append_history(conv_id, text, response_text)
-                suggestions = self._pick_suggestions(text, agent_name)
-                card_payload = self.formatter.format_response(
-                    response_text, agent_name, suggestions=suggestions
-                )
-                await ctx.send_activity(
-                    MessageFactory.attachment(self._make_attachment(card_payload))
-                )
-            except Exception as inner_exc:
-                err_card = self.formatter.format_error_card(str(inner_exc))
-                await ctx.send_activity(
-                    MessageFactory.attachment(self._make_attachment(err_card))
-                )
-
-        try:
-            await self.adapter.continue_conversation(
-                reference, _callback, bot_app_id=self.bot_app_id
-            )
-        except Exception as exc:  # pragma: no cover - logged for ops
-            print(f"[continue_conversation] failed: {exc}", flush=True)
 
     def _append_history(self, conv_id: str, user_text: str, assistant_text: str) -> None:
         history = self._history[conv_id]
@@ -152,26 +212,22 @@ class BrokerBot(TeamsActivityHandler):
     # Backend integration
     # ------------------------------------------------------------------
 
-    async def _call_backend(
+    async def _iter_backend_events(
         self, message: str, history: list[dict[str, str]]
-    ) -> tuple[str, str]:
-        """Stream from the BrokerWorkbench handoff endpoint and aggregate.
+    ) -> AsyncIterator[dict[str, Any]]:
+        """Yield parsed SSE events from the handoff endpoint as they arrive.
 
-        Consumes SSE events from /api/agent/chat/handoff/stream:
-        - ``token``    \u2192 append to response text
-        - ``routing``  \u2192 capture active specialist agent name
-        - ``done``     \u2192 finalize (use ``content`` if no tokens streamed)
-        - ``error``    \u2192 raise
-        Returns ``(agent_name, response_text)``.
+        Streams from ``/api/agent/chat/handoff/stream`` and yields each decoded
+        event dict (``token`` / ``routing`` / ``status`` / ``tool_call`` /
+        ``tool_result`` / ``done`` / ``error``) so the caller can forward
+        progress to the surface in real time instead of buffering the whole
+        answer. The caller owns timeouts/heartbeats.
         """
         payload: dict[str, Any] = {
             "message": message,
             "agent": "triage",
             "history": history,
         }
-
-        agent_name = "BrokerAgent"
-        full_text = ""
 
         async with httpx.AsyncClient(timeout=120.0) as client:
             async with client.stream(
@@ -188,23 +244,8 @@ class BrokerBot(TeamsActivityHandler):
                         event = json.loads(raw_line[6:].strip())
                     except (json.JSONDecodeError, ValueError):
                         continue
-                    etype = event.get("type")
-                    if etype == "token":
-                        full_text += event.get("content", "")
-                    elif etype == "routing":
-                        if event.get("agent"):
-                            agent_name = event["agent"]
-                    elif etype == "done":
-                        if event.get("agent"):
-                            agent_name = event["agent"]
-                        if not full_text and event.get("content"):
-                            full_text = event["content"]
-                    elif etype == "error":
-                        raise RuntimeError(event.get("content") or "Agent error")
-
-        if not full_text:
-            full_text = "No response from backend."
-        return agent_name, full_text
+                    if isinstance(event, dict) and event.get("type"):
+                        yield event
 
     # ------------------------------------------------------------------
     # Helpers
