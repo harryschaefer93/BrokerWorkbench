@@ -1,4 +1,4 @@
-"""MCP contract: verify all 10 tools are registered with valid JSON schemas."""
+"""MCP contract: verify all 14 tools are registered with valid JSON schemas."""
 
 from __future__ import annotations
 
@@ -15,10 +15,15 @@ EXPECTED_TOOLS = {
     "get_coverage_gaps",
     "get_claims_history",
     "get_loss_ratio_trend",
+    # Composite tools.
+    "get_client_brief",
+    "get_renewal_brief",
+    "get_quote_workup",
+    "get_claims_workup",
 }
 
 
-async def test_all_10_tools_registered(mcp_session):
+async def test_all_tools_registered(mcp_session):
     async with mcp_session() as client:
         listed = await client.list_tools()
     names = {t.name for t in listed.tools}
@@ -48,6 +53,9 @@ async def test_every_tool_has_description_and_input_schema(mcp_session):
         ("get_coverage_gaps", {"client_id"}),
         ("get_claims_history", {"client_id"}),
         ("get_loss_ratio_trend", {"client_id"}),
+        ("get_client_brief", {"client_id"}),
+        ("get_quote_workup", {"client_id"}),
+        ("get_claims_workup", {"client_id"}),
     ],
 )
 async def test_tool_required_args(mcp_session, tool_name, required_args):

@@ -1,10 +1,12 @@
 """
 MCP tool wrappers for the Broker Workbench.
 
-These 10 tools form the agent-facing API consumed by the Foundry Agent
-Service `MCPStreamableHTTPTool`. They mirror the shapes of the original
-`backend/agents/tools.py` functions so the merged system prompt (added in
-Phase A sub-step 2) keeps working unchanged.
+These tools form the agent-facing API consumed by the Foundry Agent
+Service `MCPStreamableHTTPTool`: 10 granular tools that mirror the shapes
+of the original `backend/agents/tools.py` functions, plus 4 composite
+tools (get_client_brief / get_renewal_brief / get_quote_workup /
+get_claims_workup) that collapse the common multi-call broker workflows
+into a single round trip for the hosted-agent latency budget.
 
 Backed by the broker SQL database (carriers, clients, policies, claims,
 market_rates) via the shared SQLAlchemy session factories.
@@ -740,6 +742,266 @@ async def get_loss_ratio_trend(client_id: str) -> Dict[str, Any]:
 
 
 # =====================================================================
+# Composite tools (Phase: hosted-agent latency)
+# ---------------------------------------------------------------------
+# Each composite tool maps to ONE real broker UX task and internally
+# reuses the granular tool functions above. On the hosted-agent path
+# every tool call costs a full hosted-agent -> MCP-HTTP -> auth -> SQL
+# round trip PLUS one model reasoning-loop iteration. Collapsing the
+# common 3-6 call workflows into a single tool removes both the network
+# hops and the extra model turns, which is the highest-leverage
+# interactive-latency win. The sub-calls run in-process inside the MCP
+# server (local SQL sessions), so correctness is identical to issuing
+# the granular calls individually.
+# =====================================================================
+
+def _is_error(value: Any) -> bool:
+    """True if a granular tool returned an error envelope."""
+    if isinstance(value, dict):
+        return "error" in value
+    if isinstance(value, list) and value and isinstance(value[0], dict):
+        return "error" in value[0]
+    return False
+
+
+def _error_of(value: Any) -> str:
+    if isinstance(value, dict):
+        return str(value.get("error"))
+    if isinstance(value, list) and value and isinstance(value[0], dict):
+        return str(value[0].get("error"))
+    return "unknown error"
+
+
+async def get_client_brief(client_id: str) -> Dict[str, Any]:
+    """One-call client 360 for meeting prep or "tell me about <client>".
+
+    Bundles the client profile, every policy, the soonest-expiring
+    renewals (prioritized), a claims/loss-ratio summary, and coverage
+    gaps. Prefer this over calling get_client_info + get_client_policies
+    + get_claims_history + get_coverage_gaps separately."""
+    info = await get_client_info(client_id)
+    if _is_error(info):
+        return info  # type: ignore[return-value]
+
+    policies = await get_client_policies(client_id)
+    claims = await get_claims_history(client_id)
+    gaps = await get_coverage_gaps(client_id)
+
+    policy_list = policies if not _is_error(policies) else []
+    upcoming = sorted(
+        (
+            p for p in policy_list
+            if isinstance(p, dict) and p.get("days_until_renewal") is not None
+        ),
+        key=lambda p: p["days_until_renewal"],
+    )
+
+    return {
+        "client": info,
+        "policy_count": len(policy_list),
+        "policies": policy_list,
+        "upcoming_renewals": upcoming[:5],
+        "claims_summary": claims.get("summary") if not _is_error(claims) else None,
+        "renewal_impact": claims.get("renewal_impact") if not _is_error(claims) else None,
+        "coverage_gaps": gaps.get("coverage_gaps") if not _is_error(gaps) else [],
+        "cross_sell_opportunities": (
+            gaps.get("cross_sell_opportunities") if not _is_error(gaps) else 0
+        ),
+    }
+
+
+async def get_renewal_brief(
+    client_id: Optional[str] = None,
+    urgency: Optional[str] = None,
+    days_ahead: int = 30,
+    limit: int = 25,
+) -> Dict[str, Any]:
+    """Prioritized renewals with carrier + client names already included.
+
+    Pass ``client_id`` for a single client's upcoming renewals, or omit it
+    for a book-wide view (optionally filtered by ``urgency``). Prefer this
+    over get_client_policies / get_renewals_by_urgency for "what's
+    renewing", "upcoming renewals", or "when does <client> renew" prompts."""
+    has_client = bool(
+        client_id and str(client_id).strip().lower() not in ("none", "null", "")
+    )
+    if not has_client:
+        # Book-wide path already returns names + priority scores.
+        return await get_renewals_by_urgency(
+            urgency=urgency, days_ahead=days_ahead, limit=limit
+        )
+
+    try:
+        window = int(days_ahead)
+    except (TypeError, ValueError):
+        window = 30
+    if window <= 0:
+        window = 30
+    if window > 365:
+        window = 365
+
+    info = await get_client_info(client_id)  # type: ignore[arg-type]
+    if _is_error(info):
+        return info  # type: ignore[return-value]
+    policies = await get_client_policies(client_id)  # type: ignore[arg-type]
+    if _is_error(policies):
+        return {"error": _error_of(policies)}
+
+    client_name = info.get("name", "Unknown")
+    urgency_norm: Optional[str] = None
+    if urgency and str(urgency).lower() not in ("none", "null", ""):
+        u = str(urgency).lower()
+        if u not in {"critical", "high", "medium", "low"}:
+            return {"error": f"Invalid urgency level: {urgency}. Use critical, high, medium, or low."}
+        urgency_norm = u
+
+    renewals: List[Dict[str, Any]] = []
+    counts = {"critical": 0, "high": 0, "medium": 0, "low": 0}
+    premium_at_risk = 0.0
+    for p in policies:
+        days = p.get("days_until_renewal")
+        if days is None or days > window:
+            continue
+        u = p.get("urgency") or _urgency(days)
+        if urgency_norm and u != urgency_norm:
+            continue
+        if u in counts:
+            counts[u] += 1
+        prem = p.get("premium") or 0.0
+        premium_at_risk += prem
+        renewals.append({
+            "policy_id": p.get("policy_id"),
+            "policy_number": p.get("policy_number"),
+            "policy_type": p.get("policy_type"),
+            "client_id": info.get("client_id"),
+            "client_name": client_name,
+            "carrier_name": p.get("carrier_name", "Unknown"),
+            "expiration_date": p.get("expiration_date"),
+            "days_until_renewal": days,
+            "premium": prem,
+            "urgency": u,
+            "priority_score": _priority_score(days, prem),
+        })
+
+    renewals.sort(key=lambda x: x["priority_score"], reverse=True)
+    total_matched = len(renewals)
+    try:
+        cap = int(limit)
+    except (TypeError, ValueError):
+        cap = 25
+    if cap <= 0:
+        cap = 25
+    if cap > 100:
+        cap = 100
+    truncated = total_matched > cap
+    if truncated:
+        renewals = renewals[:cap]
+    return {
+        "client_id": info.get("client_id"),
+        "client_name": client_name,
+        "total_renewals": total_matched,
+        "returned_count": len(renewals),
+        "truncated": truncated,
+        "limit": cap,
+        "days_ahead": window,
+        "critical_count": counts["critical"],
+        "high_count": counts["high"],
+        "medium_count": counts["medium"],
+        "low_count": counts["low"],
+        "total_premium_at_risk": round(premium_at_risk, 2),
+        "renewals": renewals,
+    }
+
+
+async def get_quote_workup(
+    client_id: str, policy_type: Optional[str] = None
+) -> Dict[str, Any]:
+    """Quote prep in a single call: client profile, current policies, and
+    carrier rate comparisons.
+
+    If ``policy_type`` is given, compares rates for just that line;
+    otherwise compares rates for every distinct line the client already
+    carries (using each policy's own coverage limit). Prefer this over
+    get_client_info + get_client_policies + compare_carrier_rates per
+    line for quote / renewal-pricing prompts."""
+    info = await get_client_info(client_id)
+    if _is_error(info):
+        return info  # type: ignore[return-value]
+    policies = await get_client_policies(client_id)
+    policy_list = policies if not _is_error(policies) else []
+    industry = info.get("industry") or ""
+
+    requested: Optional[str] = None
+    if policy_type and str(policy_type).strip().lower() not in ("none", "null", ""):
+        requested = str(policy_type).strip().lower()
+        if requested not in VALID_PRODUCT_TYPES:
+            return {
+                "error": f"Invalid policy type: {policy_type}. Valid types: {sorted(VALID_PRODUCT_TYPES)}"
+            }
+
+    # Largest coverage limit the client carries per line — a sensible
+    # default basis for the rate comparison.
+    cov_by_type: Dict[str, float] = {}
+    for p in policy_list:
+        pt = p.get("policy_type")
+        cov = p.get("coverage_limit")
+        if pt and cov:
+            cov_by_type[pt] = max(cov_by_type.get(pt, 0.0), float(cov))
+
+    if requested:
+        targets = [requested]
+    else:
+        targets = [t for t in cov_by_type if t in VALID_PRODUCT_TYPES]
+    # De-dupe while preserving order.
+    seen: set = set()
+    targets = [t for t in targets if not (t in seen or seen.add(t))]
+
+    comparisons: Dict[str, Any] = {}
+    for pt in targets:
+        coverage = cov_by_type.get(pt, 1_000_000.0)
+        comparisons[pt] = await compare_carrier_rates(
+            policy_type=pt,
+            coverage_limit=coverage,
+            industry=industry,
+            annual_revenue=None,
+        )
+
+    return {
+        "client": info,
+        "policy_count": len(policy_list),
+        "policies": policy_list,
+        "quoted_policy_types": targets,
+        "carrier_comparisons": comparisons,
+    }
+
+
+async def get_claims_workup(client_id: str) -> Dict[str, Any]:
+    """Full claims picture in one call: 3-year claims history with loss
+    ratio, renewal-impact assessment, and loss-control recommendations,
+    plus the year-over-year loss-ratio trend.
+
+    Prefer this over get_claims_history + get_loss_ratio_trend for claims
+    review, loss-run, or renewal-impact prompts."""
+    history = await get_claims_history(client_id)
+    if _is_error(history):
+        return history  # type: ignore[return-value]
+    trend = await get_loss_ratio_trend(client_id)
+
+    return {
+        "client_id": history.get("client_id"),
+        "client_name": history.get("client_name"),
+        "industry": history.get("industry"),
+        "analysis_period": history.get("analysis_period"),
+        "summary": history.get("summary"),
+        "renewal_impact": history.get("renewal_impact"),
+        "claims_history": history.get("claims_history"),
+        "recommendations": history.get("recommendations"),
+        "loss_ratio_trend": None if _is_error(trend) else trend,
+        "source": "broker_db",
+    }
+
+
+# =====================================================================
 # FastMCP registration
 # =====================================================================
 
@@ -754,6 +1016,11 @@ _ALL_TOOLS = [
     get_coverage_gaps,
     get_claims_history,
     get_loss_ratio_trend,
+    # Composite tools — collapse common multi-call broker workflows.
+    get_client_brief,
+    get_renewal_brief,
+    get_quote_workup,
+    get_claims_workup,
 ]
 
 
