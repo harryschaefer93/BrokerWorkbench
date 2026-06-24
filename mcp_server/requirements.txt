@@ -1,0 +1,12 @@
+mcp>=1.2.0
+fastapi>=0.110.0
+uvicorn[standard]>=0.27.0
+# Shared DB stack — keep ranges aligned with backend/requirements.txt
+sqlalchemy[asyncio]>=2.0.25
+aiosqlite>=0.19.0
+python-dotenv>=1.0.0
+# Azure SQL parity (matches backend)
+aioodbc>=0.5.0
+
+# Azure Monitor OpenTelemetry distro — auto-instruments ASGI + SQLAlchemy
+azure-monitor-opentelemetry>=1.6.0

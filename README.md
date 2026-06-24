@@ -1,6 +1,6 @@
 ﻿# 🏢 BrokerWorkbench
 
-An AI-powered insurance broker workbench that surfaces the same intelligent agents across a web hub and Microsoft Teams. Brokers can manage policies, track renewals, and get AI-powered insights — whether they're in the web dashboard or flipping to a Teams conversation. Built on Azure Container Apps, Azure AI Foundry, and Bot Framework.
+An AI-powered insurance broker workbench. One Microsoft Agent Framework handoff workflow — surfaced across web, Teams, and M365 Copilot — packaged as a Foundry Hosted Agent in Sweden Central with gpt-5 + an internal MCP server backed by Azure SQL.
 
 ## 🏗️ Architecture
 
@@ -14,66 +14,62 @@ graph TB
     subgraph Clients["🖥️ Client Surfaces"]
         Browser["🌐 Web Browser"]
         Teams["💬 Microsoft Teams"]
+        Copilot["🤖 M365 Copilot<br/><i>(custom engine agent)</i>"]
     end
 
-    subgraph ACA["☁️ Azure Container Apps Environment"]
+    subgraph ACA["☁️ Azure Container Apps Env — Sweden Central"]
         FE["<b>Frontend</b><br/>React 18 · Vite · nginx"]
         Bot["<b>Teams Bot</b><br/>Bot Framework SDK · Python"]
-
-        subgraph Backend["<b>Backend API</b> — FastAPI · Python 3.11"]
-            subgraph Agents["🧠 AI Agents — Azure OpenAI Python SDK"]
-                Triage["Triage Agent<br/><i>Intent Classification</i>"]
-                Claims["Claims Impact<br/><i>Renewal Pricing</i>"]
-                CrossSell["Cross-Sell<br/><i>Coverage Gaps</i>"]
-                Quote["Quote Comparison<br/><i>Carrier Rates</i>"]
-            end
-        end
+        Backend["<b>Backend</b><br/>FastAPI · Python 3.11<br/><i>thin SSE proxy</i>"]
+        MCP["<b>MCP Server</b><br/>FastMCP · 14 tools<br/><i>SQL-backed</i>"]
     end
 
-    subgraph Platform["⚙️ Azure Platform Services"]
-        AI["🧠 Azure AI Foundry<br/>GPT-4.1"]
-        SQL["🗄️ Azure SQL / SQLite"]
-        ACR["📦 Container Registry"]
+    subgraph Foundry["🧠 Microsoft Foundry — Sweden Central"]
+        Hosted["<b>Hosted Agent</b><br/><code>brokerworkbench</code> v5<br/>agent-framework-foundry-hosting"]
+        Workflow["Agent Framework HandoffBuilder<br/>Triage → Claims · Quote · CrossSell"]
+        GPT5["gpt-5 + gpt-5-mini<br/><i>GlobalStandard</i>"]
+        Hosted --- Workflow
+        Workflow -.-> GPT5
+    end
+
+    subgraph Data["💾 Data + Telemetry"]
+        SQL["🗄️ Azure SQL<br/>master_data + txn schemas"]
+        ACR["📦 ACR"]
         KV["🔑 Key Vault"]
-        MON["📊 App Insights +<br/>Log Analytics"]
+        AI["📊 App Insights + Log Analytics"]
     end
 
-    subgraph Identity["🔐 Identity & Security"]
-        MI["Managed Identities<br/><i>per Container App</i>"]
-        BotReg["Entra App Registration<br/><i>Bot client ID + secret</i>"]
-        BotSvc["Azure Bot Service<br/><i>Teams channel</i>"]
+    subgraph Identity["🔐 FDPO Identity (no keys)"]
+        MIBe["MI: backend"]
+        MIMcp["MI: mcp"]
+        MIHosted["MI: agent instance<br/>(platform-assigned)"]
     end
 
-    %% Client → App flows
+    %% Client → Backend → Foundry
     Browser -- "HTTPS" --> FE
-    FE -- "nginx /api proxy" --> Backend
-    Teams -- "Messages" --> BotSvc
-    BotSvc -- "Bot Framework" --> Bot
-    Bot -- "POST /api/agent/chat" --> Backend
+    FE -- "nginx /api → backend" --> Backend
+    Teams -- "Bot Framework" --> Bot
+    Copilot -- "customEngineAgents" --> Bot
+    Bot -- "SSE handoff/stream" --> Backend
+    Backend -- "Responses API<br/>(AGENT_BACKEND_MODE=hosted)" --> Hosted
 
-    %% Agent routing
-    Triage -.-> Claims
-    Triage -.-> CrossSell
-    Triage -.-> Quote
+    %% Hosted agent → MCP → SQL
+    Workflow -- "MCPStreamableHTTPTool" --> MCP
+    MCP -- "SQLAlchemy async" --> SQL
 
-    %% Backend → Services
-    Agents -- "AsyncAzureOpenAI<br/>SSE streaming" --> AI
-    Backend -- "SQLAlchemy async" --> SQL
-    Backend -- "Secret refs" --> KV
-    Backend -. "Telemetry" .-> MON
+    %% Auth
+    MIBe -- "OpenAI User" --> Hosted
+    MIHosted -- "OpenAI User" --> GPT5
+    MIMcp -- "db_datareader<br/>(clientId-derived SID)" --> SQL
 
-    %% Infra & Identity
+    %% Infra
     ACR -- "AcrPull" --> ACA
-    MI -- "OpenAI User" --> AI
-    MI -- "Secrets User" --> KV
-    BotReg -. "Auth" .-> BotSvc
+    Backend -. "trace" .-> AI
 
-    %% Styles
     style Clients fill:#f0f4ff,stroke:#4a6fa5,color:#1a1a1a
     style ACA fill:#e1f0ff,stroke:#0078d4,color:#1a1a1a
-    style Backend fill:#dbeafe,stroke:#2563eb,color:#1a1a1a
-    style Agents fill:#fff8e1,stroke:#f9a825,color:#1a1a1a
-    style Platform fill:#f3e5f5,stroke:#7b1fa2,color:#1a1a1a
+    style Foundry fill:#fff8e1,stroke:#f9a825,color:#1a1a1a
+    style Data fill:#f3e5f5,stroke:#7b1fa2,color:#1a1a1a
     style Identity fill:#e8f5e9,stroke:#388e3c,color:#1a1a1a
 ```
 
@@ -104,9 +100,9 @@ The Claims Impact Agent analyzes a client's loss history, shows expected premium
 
 | Surface | URL |
 |---------|-----|
-| Web Workbench | [ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io](https://ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io) |
-| Backend API | [ca-backend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io](https://ca-backend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io/docs) |
-| Bot Health | [ca-bot-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io/health](https://ca-bot-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io/health) |
+| Web Workbench | [ca-frontend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io](https://ca-frontend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io) |
+| Backend API | [ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io](https://ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io/docs) |
+| Bot Health | [ca-bot-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io/health](https://ca-bot-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io/health) |
 | Teams Bot | Sideload `bot/BrokerWorkbench-Bot.zip` in Teams |
 
 ## 🚀 Quick Start
@@ -386,3 +382,28 @@ az cognitiveservices account deployment list \
 - [BRIEF.md](BRIEF.md) — Project manifest, completed work, and debugging log
 - [infra/README.md](infra/README.md) — Azure infrastructure and deployment guide
 - [frontend-react/README.md](frontend-react/README.md) — React frontend documentation
+
+---
+
+## 🧪 Running tests
+
+Backend + MCP (pytest, 54 tests):
+
+```bash
+pip install -r tests/requirements.txt
+python -m data.seed.setup --reseed     # one-time: populate SQLite under data/db/
+pytest tests/                          # boots mcp_server.server on a free port
+```
+
+Frontend smoke (Playwright, 1 spec):
+
+```bash
+cd tests/e2e
+npm install
+npx playwright install chromium
+# Requires the frontend running on http://localhost:8080
+npx playwright test
+```
+
+CI runs both jobs on every push/PR to `main` and `fieldday`. See
+[.github/workflows/test.yml](.github/workflows/test.yml).

@@ -1,0 +1,26 @@
+{
+  "answer": "Here\u2019s your prioritized hit list for today (next 0\u20134 days):\n\n| Client | Policy | Type | Expires | Days | Premium |\n|---|---|---|---|---|---|\n| Sterling Accounting Partners | POL-2026-00008 | Cyber | 2026-05-31 | 0 | $6,667.80 |\n| Riverbend Family Practice | POL-2026-00024 | Cyber | 2026-05-31 | 0 | $8,871.00 |\n| Quanta Robotics | POL-2026-00051 | Prof Liab | 2026-05-31 | 0 | $3,400.80 |\n| Lakeside Dental Partners | POL-2026-00035 | GL | 2026-06-01 | 1 | $11,715.60 |\n| Redwood Industrial | POL-2026-00037 | Property | 2026-06-01 | 1 | $2,346.96 |\n| Pioneer Freight | POL-2026-00047 | Workers\u2019 Comp | 2026-06-02 | 2 | $11,431.25 |\n| Atlas Machining | POL-2026-00055 | Workers\u2019 Comp | 2026-06-02 | 2 | $1,153.75 |\n| Cedar Ridge Builders | POL-2026-00034 | Commercial Auto | 2026-06-03 | 3 | $1,556.62 |\n| Northwind Code Co | POL-2026-00025 | Property | 2026-06-03 | 3 | $793.12 |\n| Riverstone Apparel | POL-2026-00007 | Workers\u2019 Comp | 2026-06-04 | 4 | $11,870.00 |\n\nActions:\n- Expiring today: confirm bind or lapse plan; issue binders/COIs; if pending quotes, escalate.  \n- 1\u20132 days: finalize marketing selections and proposal letters; confirm updates (SOV, payrolls, drivers, revenues).  \n- 3\u20134 days: schedule client calls; gather any missing apps/loss runs; line up contingencies.  \n- Flagged high impact next: Brookside Consulting (Prof Liab, 6/9, $15,418.50) and Latitude Devices (Prof Liab, 6/20, $16,458.00) for early outreach.\n\nWant me to:\n- Kick off quote comparisons on any of these? I\u2019ll hand it to our Quote desk.\n- Review claims impact before renewal talks? I\u2019ll loop in Claims.\n- Check for coverage gaps/cross-sell on these accounts? I\u2019ll route to Cross\u2011Sell.\n\nI can also pull the full 30\u2011day critical list or email a task sheet\u2014what do you prefer?Top priorities I\u2019ll move on unless you say otherwise:\n\n- Expiring today (need go/no\u2011go): Sterling Accounting Partners (Cyber), Riverbend Family Practice (Cyber), Quanta Robotics (Prof Liab). Do you want me to bind as quoted or keep marketing live and escalate for alternates?\n- 1\u20132 day runway: Lakeside Dental Partners (GL) and Redwood Industrial (Property). I can refresh market comps and draft proposals now so you\u2019re set for client calls.\n- 3\u20134 day runway: Pioneer Freight (WC), Atlas Machining (WC), Cedar Ridge Builders (Auto), Northwind Code (Property), Riverstone Apparel (WC). I\u2019ll queue updated payroll/driver/SOV checks.\n\nSay \u201cBind Sterling/Riverbend/Quanta\u201d and I\u2019ll issue binders/COIs. Or say \u201cQuote comps for Lakeside/Redwood\u201d and I\u2019ll kick off the market pulls. Want the full 30\u2011day critical list or a task sheet emailed?",
+  "backend": "https://ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io",
+  "expected_agent": null,
+  "expected_keywords": [
+    "renewal",
+    "priority",
+    "today",
+    "critical"
+  ],
+  "expected_tools": [
+    "get_renewals_by_urgency"
+  ],
+  "final_agent_short": "Quote",
+  "first_token_s": 41.08,
+  "id": "ambiguous_today",
+  "prompt": "What should I be working on today?",
+  "routed_to": [
+    "QuoteComparisonAgent"
+  ],
+  "tool_calls": [
+    "get_renewals_by_urgency",
+    "request_info"
+  ],
+  "total_s": 52.49
+}

@@ -1,0 +1,25 @@
+{
+  "answer": "Expected renewal premium impact: **+25%**\n\nWhat\u2019s driving it\n- Loss experience: 3\u2011year loss ratio is **293%**, with recent years at **146.5% (2025)** and **103% (2026)**. That signals poor profitability for the carrier.\n- Frequency: **5 claims** in 3 years, with a spike in 2024 (**3 claims**) across multiple lines.\n- Severity: Average claim is **$16.3k**; notable items include a product liability claim (**$20,361**) and a recent theft claim (**$14,322**). Total incurred over 3 years is **$81,492**.\n\nActions to improve\n- Partner with the carrier\u2019s loss control team to target product liability/E&O exposures and tighten physical security to curb theft.\n- Implement and document product QA and incident response protocols; train staff and update contracts/indemnities to reduce E&O and liability frequency.\n- Consider higher deductibles or claim\u2011prevention credits; share mid\u2011term improvements and any clean months-to-date to negotiate down the increase.",
+  "backend": "https://ca-backend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io",
+  "expected_agent": "Claims",
+  "expected_keywords": [
+    "loss ratio",
+    "renewal",
+    "claim"
+  ],
+  "expected_tools": [
+    "get_claims_history"
+  ],
+  "final_agent_short": "Claims",
+  "first_token_s": 41.65,
+  "id": "claims_impact",
+  "prompt": "What's the renewal impact for CLI001 given their claims history?",
+  "routed_to": [
+    "ClaimsImpactAgent"
+  ],
+  "tool_calls": [
+    "get_claims_history",
+    "request_info"
+  ],
+  "total_s": 44.86
+}

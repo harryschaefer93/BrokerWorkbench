@@ -7,8 +7,8 @@
 # ============================================================================
 
 $ErrorActionPreference = "Stop"
-$RG = "rg-bwbench-demo"
-$LOCATION = "westus2"
+$RG = "rg-bwbench-sc"
+$LOCATION = "swedencentral"
 $BICEP_FILE = "$PSScriptRoot\main.bicep"
 $BICEP_PARAMS = "$PSScriptRoot\main.bicepparam"
 

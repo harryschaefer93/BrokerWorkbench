@@ -17,7 +17,16 @@ services:
     env_file:
       - .env
     environment:
-      - DATABASE_URL=sqlite+aiosqlite:///./local.db
+      # SQLite file lives on the broker_db named volume mounted at /app/data
+      # so it survives container/image rebuilds.
+      - DATABASE_URL=sqlite+aiosqlite:///./data/local.db
+      # Point master-data engine at the same SQLite file; schema_translate_map
+      # in connection.py keeps the master/transactional namespaces separate.
+      - MASTER_DATABASE_URL=sqlite+aiosqlite:///./data/local.db
+      # Make the host ./data tree (mounted at /seed_src/data) importable as the
+      # top-level `data` package so `python -m data.seed.setup` works inside
+      # the container without colliding with the broker_db volume at /app/data.
+      - PYTHONPATH=/app:/seed_src
       - ENVIRONMENT=dev
       # Tell AzureCliCredential exactly where the mounted token cache lives.
       # Without this, az CLI inside the container may fall back to root's ~/.azure
@@ -32,6 +41,14 @@ services:
     volumes:
       # Mount source code for hot reload during development
       - ./backend:/app
+      # Persist SQLite database across rebuilds. NOTE: named volumes are created
+      # root-owned by default; if appuser cannot write, run once:
+      #   docker-compose run --rm --user root backend chown -R appuser:appuser /app/data
+      - broker_db:/app/data
+      # Mount the host ./data tree (broker database loader package + .cache) into
+      # /seed_src/data so `python -m data.seed.setup` is runnable in the backend
+      # container. Read-write so the loader can persist its taxonomy cache across runs.
+      - ./data:/seed_src/data
       # Mount Azure CLI config so DefaultAzureCredential can use AzureCliCredential.
       # On the host run: az login  (then docker-compose up — no re-login needed)
       # Note: must be read-write; az CLI writes command logs to ~/.azure/commands/
@@ -39,6 +56,36 @@ services:
     command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # MCP Server — wraps the 10 broker-domain tools for the Foundry agent.
+  # Build context is the repo root so the Dockerfile can COPY both
+  # mcp_server/ and backend/db/ (shared DB layer).
+  mcp_server:
+    build:
+      context: .
+      dockerfile: mcp_server/Dockerfile
+    ports:
+      - "8001:8001"
+    env_file:
+      - .env
+    environment:
+      # Share the seeded SQLite DB with the backend via the broker_db volume.
+      - DATABASE_URL=sqlite+aiosqlite:///./data/local.db
+      - MASTER_DATABASE_URL=sqlite+aiosqlite:///./data/local.db
+      - PORT=8001
+      - ENVIRONMENT=dev
+    volumes:
+      # Shared seeded DB. Backend's healthcheck (below) gates startup so the
+      # DB is initialized + seeded before the MCP server boots.
+      - broker_db:/app/data
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8001/mcp', timeout=5)"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -76,3 +123,7 @@ services:
 #
 # volumes:
 #   sqldata:
+
+volumes:
+  # Persistent SQLite database for the backend service.
+  broker_db:

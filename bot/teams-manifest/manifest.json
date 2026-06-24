@@ -1,13 +1,13 @@
 {
-  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.17/MicrosoftTeams.schema.json",
-  "manifestVersion": "1.17",
-  "version": "1.0.0",
+  "$schema": "https://developer.microsoft.com/en-us/json-schemas/teams/v1.20/MicrosoftTeams.schema.json",
+  "manifestVersion": "1.20",
+  "version": "1.1.0",
   "id": "ce8f24bc-4c90-42c4-aa82-3cccad46d22f",
   "developer": {
     "name": "BrokerWorkbench",
-    "websiteUrl": "https://ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io",
-    "privacyUrl": "https://ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io",
-    "termsOfUseUrl": "https://ca-frontend-brokerworkbench-dev.thankfulpond-970c315d.westus2.azurecontainerapps.io"
+    "websiteUrl": "https://ca-frontend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io",
+    "privacyUrl": "https://ca-frontend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io",
+    "termsOfUseUrl": "https://ca-frontend-brokerworkbench-dev.kinddune-112ddddc.swedencentral.azurecontainerapps.io"
   },
   "name": {
     "short": "BrokerWorkbench",
@@ -15,7 +15,7 @@
   },
   "description": {
     "short": "AI-powered insurance broker assistant",
-    "full": "BrokerWorkbench brings your insurance AI agents into Microsoft Teams. Get claims analysis, carrier quotes, cross-sell opportunities, and renewal tracking — the same agents available in your web workbench, now in Teams."
+    "full": "BrokerWorkbench brings your insurance AI agents into Microsoft Teams and M365 Copilot. Get claims analysis, carrier quotes, cross-sell opportunities, and renewal tracking \u2014 the same multi-agent system available in your web workbench, now in every Microsoft surface."
   },
   "icons": {
     "outline": "outline.png",
@@ -53,6 +53,14 @@
       ]
     }
   ],
+  "copilotAgents": {
+    "customEngineAgents": [
+      {
+        "type": "bot",
+        "id": "ce8f24bc-4c90-42c4-aa82-3cccad46d22f"
+      }
+    ]
+  },
   "permissions": ["identity", "messageTeamMembers"],
   "validDomains": []
 }

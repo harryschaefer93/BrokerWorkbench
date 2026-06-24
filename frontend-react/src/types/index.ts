@@ -65,6 +65,14 @@ export interface CarrierQuote {
   savings?: number;
 }
 
+export interface ToolCall {
+  id: string;
+  name: string;
+  arguments: Record<string, unknown>;
+  status: 'pending' | 'ok' | 'error';
+  summary?: string;
+}
+
 export interface ChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -72,6 +80,7 @@ export interface ChatMessage {
   timestamp: Date;
   agentType?: 'claims' | 'crosssell' | 'quote' | 'triage';
   suggestions?: string[];
+  toolCalls?: ToolCall[];
 }
 
 export interface CrossSellOpportunity {

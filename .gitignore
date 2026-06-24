@@ -32,11 +32,45 @@ Thumbs.db
 *.log
 logs/
 
-# Local SQLite databases (generated at runtime)
+# Local SQLite databases (generated at runtime by the seeder)
 backend/local.db
+backend/data/*.db
+data/db/*.db
+
+# Scratch / snapshot notes (local only)
+docs/snap*.md
+
+# Seed cache (regenerated on first run; keep the .gitkeep marker)
+data/seed/.cache/*
+!data/seed/.cache/.gitkeep
+
+# Test artifacts
+.pytest_cache/
+tests/e2e/node_modules/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
+tests/e2e/playwright/.cache/
+qa_*.txt
+qa_*.log
+qa*.txt
+smoke_*.log
+
+# Local scratch dumps from ad-hoc Azure REST/diagnostic scripts (root only)
+/*.json
+/*.txt
+/*.tar.gz
+scratch/
+
+# Azure dev artifacts
+.azure/
+azd-env-*.json
 
 # TypeScript build info
 *.tsbuildinfo
+
+# Compiled ARM templates from Bicep (regenerated on every build)
+infra/*.json
+!infra/*.bicepparam.json
 
 # Project brief (local context, not committed)
 BRIEF.md

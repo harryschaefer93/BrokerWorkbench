@@ -6,27 +6,87 @@ Endpoints:
   GET  /health        — Health check
 """
 
+import logging
+import os
+
+# ─── Azure Monitor / OpenTelemetry ─────────────────────────────────────────
+_ai_conn = os.getenv("APPLICATIONINSIGHTS_CONNECTION_STRING", "").strip()
+_ai_enabled = False
+if _ai_conn:
+    os.environ.setdefault("OTEL_SERVICE_NAME", "bot")
+    try:
+        from azure.monitor.opentelemetry import configure_azure_monitor
+        configure_azure_monitor(connection_string=_ai_conn)
+        _ai_enabled = True
+        logging.getLogger(__name__).warning(
+            "AZMON_INIT_OK service=%s", os.environ["OTEL_SERVICE_NAME"]
+        )
+        try:
+            from opentelemetry.instrumentation.aiohttp_server import AioHttpServerInstrumentor
+            AioHttpServerInstrumentor().instrument()
+            logging.getLogger(__name__).warning("AZMON_AIOHTTP_SERVER_OK")
+        except Exception as exc2:  # noqa: BLE001
+            logging.getLogger(__name__).warning("AZMON_AIOHTTP_SERVER_FAIL: %s", exc2)
+    except Exception as exc:  # noqa: BLE001 — telemetry must never break startup
+        logging.getLogger(__name__).warning("AZMON_INIT_FAIL: %s", exc)
+
 from aiohttp import web
-from botbuilder.core import (
-    BotFrameworkAdapter,
-    BotFrameworkAdapterSettings,
-    TurnContext,
-)
+from botbuilder.core import TurnContext
+from botbuilder.core.cloud_adapter_base import CloudAdapterBase
 from botbuilder.schema import Activity
+from botframework.connector.auth import (
+    AuthenticationConfiguration,
+    AuthenticationConstants,
+    BotFrameworkAuthenticationFactory,
+    PasswordServiceClientCredentialFactory,
+)
 
 from config import Settings
 from bot import BrokerBot
 
 settings = Settings()
+_tenant_id = (settings.microsoft_app_tenant_id or "").strip()
 
-adapter_settings = BotFrameworkAdapterSettings(
+_credential_factory = PasswordServiceClientCredentialFactory(
     app_id=settings.microsoft_app_id,
-    app_password=settings.microsoft_app_password,
-    channel_auth_tenant=settings.microsoft_app_tenant_id or None,
+    password=settings.microsoft_app_password,
+    tenant_id=_tenant_id or None,
 )
-adapter = BotFrameworkAdapter(adapter_settings)
 
-bot = BrokerBot(settings)
+if _tenant_id:
+    # SingleTenant bot: parameterize auth with tenant-specific login URL so the
+    # bot can both (a) validate inbound JWTs from ABS and (b) acquire outbound
+    # tokens against the customer tenant authority.
+    _auth = BotFrameworkAuthenticationFactory.create(
+        validate_authority=True,
+        to_channel_from_bot_login_url=(
+            f"https://login.microsoftonline.com/{_tenant_id}"
+        ),
+        to_channel_from_bot_oauth_scope=(
+            AuthenticationConstants.TO_CHANNEL_FROM_BOT_OAUTH_SCOPE
+        ),
+        to_bot_from_channel_token_issuer=(
+            AuthenticationConstants.TO_BOT_FROM_CHANNEL_TOKEN_ISSUER
+        ),
+        oauth_url=AuthenticationConstants.OAUTH_URL,
+        to_bot_from_channel_open_id_metadata_url=(
+            AuthenticationConstants.TO_BOT_FROM_CHANNEL_OPENID_METADATA_URL
+        ),
+        to_bot_from_emulator_open_id_metadata_url=(
+            AuthenticationConstants.TO_BOT_FROM_EMULATOR_OPENID_METADATA_URL
+        ),
+        caller_id="urn:botframework:azure",
+        credential_factory=_credential_factory,
+        auth_configuration=AuthenticationConfiguration(tenant_id=_tenant_id),
+    )
+else:
+    _auth = BotFrameworkAuthenticationFactory.create(
+        credential_factory=_credential_factory,
+    )
+
+adapter = CloudAdapterBase(_auth)
+
+bot = BrokerBot(settings, adapter=adapter)
 
 
 async def on_error(context: TurnContext, error: Exception):
@@ -47,7 +107,9 @@ async def messages(req: web.Request) -> web.Response:
     activity = Activity().deserialize(body)
     auth_header = req.headers.get("Authorization", "")
 
-    response = await adapter.process_activity(activity, auth_header, bot.on_turn)
+    # CloudAdapterBase.process_activity signature is
+    # (auth_header_or_authenticate_request_result, activity, logic) — auth FIRST.
+    response = await adapter.process_activity(auth_header, activity, bot.on_turn)
     if response:
         return web.json_response(data=response.body, status=response.status)
     return web.Response(status=201)

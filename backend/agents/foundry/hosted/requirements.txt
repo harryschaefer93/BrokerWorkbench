@@ -1,0 +1,14 @@
+# Hosted-agent container deps.
+# Pin the lean Agent Framework subpackages directly to avoid pulling the
+# umbrella `agent-framework[all]` which drags in mem0ai, qdrant-client,
+# openai-agents, etc. — none of which we need (and which blow image size
+# past 1Gi). The workflow only needs core + orchestrations + openai +
+# foundry-hosting + the MCP client.
+agent-framework-core>=1.6.0,<2
+agent-framework-orchestrations>=1.0.0rc2
+agent-framework-openai>=1.6.0,<2
+agent-framework-foundry
+agent-framework-foundry-hosting
+azure-identity>=1.17.0
+python-dotenv>=1.0.0
+mcp>=1.0.0

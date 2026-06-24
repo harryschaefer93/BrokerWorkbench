@@ -4,6 +4,7 @@ import ReactMarkdown, { Components } from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { Button, Input, ScrollArea } from "@/components/ui";
 import { useChat } from "@/hooks";
+import type { ToolCall } from "@/types";
 import {
   Send,
   RefreshCw,
@@ -17,6 +18,10 @@ import {
   TrendingUp,
   Shield,
   FileText,
+  Wrench,
+  CheckCircle2,
+  XCircle,
+  Loader2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -348,10 +353,84 @@ interface ChatMessageProps {
     timestamp: Date;
     agentType?: string;
     suggestions?: string[];
+    toolCalls?: ToolCall[];
   };
   onSuggestionClick?: (suggestion: string) => void;
   isClearing?: boolean;
   isStreaming?: boolean;
+}
+
+function ToolPill({ tool }: { tool: ToolCall }) {
+  const [open, setOpen] = useState(false);
+  const isPending = tool.status === "pending";
+  const isOk = tool.status === "ok";
+  const isError = tool.status === "error";
+
+  const Icon = isOk ? CheckCircle2 : isError ? XCircle : Wrench;
+
+  const palette = isOk
+    ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/20 dark:text-emerald-300 dark:border-emerald-800"
+    : isError
+      ? "bg-red-50 text-red-700 border-red-200 hover:bg-red-100 dark:bg-red-900/20 dark:text-red-300 dark:border-red-800"
+      : "bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100 dark:bg-slate-800/60 dark:text-slate-300 dark:border-slate-700";
+
+  let argsJson = "";
+  try {
+    argsJson = JSON.stringify(tool.arguments ?? {}, null, 2);
+  } catch {
+    argsJson = "<unserializable arguments>";
+  }
+
+  return (
+    <motion.div
+      layout
+      initial={{ opacity: 0, y: 4 }}
+      animate={{ opacity: 1, y: 0 }}
+      exit={{ opacity: 0, y: -4 }}
+      transition={{ duration: 0.15 }}
+      className="inline-flex flex-col"
+      data-testid="tool-pill"
+      data-tool-name={tool.name}
+      data-tool-status={tool.status}
+    >
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className={cn(
+          "inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full border text-[10px] font-mono transition-colors",
+          palette,
+        )}
+        title={tool.summary || tool.name}
+      >
+        {isPending ? (
+          <Loader2 className="h-3 w-3 animate-spin" />
+        ) : (
+          <Icon className="h-3 w-3" />
+        )}
+        <span className="truncate max-w-[10rem]">{tool.name}</span>
+      </button>
+      <AnimatePresence>
+        {open && (
+          <motion.div
+            initial={{ opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: "auto" }}
+            exit={{ opacity: 0, height: 0 }}
+            transition={{ duration: 0.15 }}
+            className="overflow-hidden mt-1"
+          >
+            <div className="rounded-md border border-border/60 bg-background/80 px-2 py-1.5 text-[10px] space-y-1 max-w-xs">
+              {tool.summary && (
+                <div className="text-muted-foreground">{tool.summary}</div>
+              )}
+              <pre className="whitespace-pre-wrap break-words font-mono text-[10px] text-foreground/80 leading-snug max-h-40 overflow-auto">
+                {argsJson}
+              </pre>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
 }
 
 function ChatMessage({
@@ -373,6 +452,9 @@ function ChatMessage({
       exit={{ opacity: 0, y: -10 }}
       transition={{ duration: 0.2 }}
       className={cn("flex gap-2", isUser && "flex-row-reverse")}
+      data-testid={`chat-message-${isUser ? "user" : "assistant"}`}
+      data-streaming={isStreaming ? "true" : "false"}
+      data-agent={message.agentType ?? ""}
     >
       <div
         className={cn(
@@ -436,6 +518,17 @@ function ChatMessage({
             <span className="inline-block w-[2px] h-[1em] bg-violet-500 align-middle ml-0.5 animate-pulse" />
           )}
         </div>
+
+        {/* Tool pills */}
+        {!isUser && message.toolCalls && message.toolCalls.length > 0 && (
+          <div className="mt-2 flex flex-wrap gap-1.5" data-testid="tool-pills">
+            <AnimatePresence initial={false}>
+              {message.toolCalls.map((tc) => (
+                <ToolPill key={tc.id} tool={tc} />
+              ))}
+            </AnimatePresence>
+          </div>
+        )}
 
         {/* Follow-up suggestions */}
         {message.suggestions && message.suggestions.length > 0 && (
@@ -582,6 +675,7 @@ export function AIChatPanel({
 
   return (
     <aside
+      data-testid="chat-panel"
       className="border-l bg-card h-[calc(100vh-4rem)] flex flex-col relative"
       style={{ width }}
     >
@@ -678,6 +772,7 @@ export function AIChatPanel({
         <div className="mt-4 space-y-3">
           <div className="flex gap-2">
             <Input
+              data-testid="chat-input"
               value={inputValue}
               onChange={(e) => setInputValue(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
@@ -685,6 +780,7 @@ export function AIChatPanel({
               className="flex-1 rounded-full text-sm"
             />
             <Button
+              data-testid="chat-send"
               onClick={handleSend}
               disabled={!inputValue.trim() || isLoading}
               className="rounded-full px-4"
@@ -694,12 +790,13 @@ export function AIChatPanel({
           </div>
 
           {/* Prompt Suggestions */}
-          <div className="flex flex-wrap gap-1.5 pt-2 border-t">
+          <div className="flex flex-wrap gap-1.5 pt-2 border-t" data-testid="prompt-suggestions">
             {promptSuggestions.map((suggestion) => {
               const Icon = suggestion.icon;
               return (
                 <button
                   key={suggestion.label}
+                  data-testid={`prompt-suggestion-${suggestion.label.toLowerCase().replace(/\s+/g, '-')}`}
                   onClick={() => handlePromptClick(suggestion.prompt)}
                   className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-muted hover:bg-primary hover:text-primary-foreground transition-colors"
                 >

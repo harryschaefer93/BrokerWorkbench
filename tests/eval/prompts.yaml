@@ -1,0 +1,73 @@
+# Canonical Field Day prompts — eval baseline for the BrokerWorkbench
+# handoff workflow. Each row:
+#   id                   : stable identifier
+#   prompt               : exact user text
+#   expected_agent       : routing target (Triage|Claims|Quote|CrossSell)
+#   expected_tools       : MCP tool names that MUST appear in tool_call frames
+#                          (at least one of these must fire)
+#   expected_keywords    : substrings the final assistant text MUST contain
+#                          (case-insensitive; >=2/3 required to pass)
+#
+# Used by tests/eval/test_canonical_prompts.py under -m live.
+- id: claims_impact
+  prompt: "What's the renewal impact for CLI001 given their claims history?"
+  expected_agent: Claims
+  expected_tools:
+    - get_claims_history
+  expected_keywords:
+    - loss ratio
+    - renewal
+    - claim
+
+- id: cross_sell
+  prompt: "Find coverage gaps and cross-sell opportunities for CLI002"
+  # Triage may route to CrossSell OR handle it from another specialist that
+  # already loaded the client. Accept either by keeping the rubric on the
+  # tool + answer content rather than the agent name.
+  expected_agent: CrossSell
+  expected_tools:
+    - get_coverage_gaps
+    - get_client_info
+    - get_client_policies
+  expected_keywords:
+    - coverage
+    - gap
+    - cross
+    - liability
+    - cyber
+
+- id: quote_compare
+  prompt: "Compare carrier rates for cyber liability for client CLI011 (assume $5M coverage limit)"
+  expected_agent: Quote
+  expected_tools:
+    - compare_carrier_rates
+    - get_carriers_for_policy_type
+  expected_keywords:
+    - carrier
+    - premium
+    - rating
+
+- id: renewal_triage
+  prompt: "Show me the top 3 critical renewals coming up"
+  # Triage routinely hands off to Quote/Claims to format renewal tables; the
+  # canonical signal here is that get_renewals_by_urgency fired and the
+  # answer surfaces critical renewals. Don't pin the final speaker.
+  expected_agent: null
+  expected_tools:
+    - get_renewals_by_urgency
+  expected_keywords:
+    - critical
+    - renewal
+    - expir
+    - priority
+
+- id: ambiguous_today
+  prompt: "What should I be working on today?"
+  expected_agent: null
+  expected_tools:
+    - get_renewals_by_urgency
+  expected_keywords:
+    - renewal
+    - priority
+    - today
+    - critical
