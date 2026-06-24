@@ -1,9 +1,10 @@
 """
 Broker Workbench MCP server entrypoint.
 
-Boots a FastMCP app exposing the 10 broker-domain tools (defined in
-`mcp_server.tools`) over the streamable-http transport so the Foundry
-Agent Service `MCPStreamableHTTPTool` can consume them.
+Boots a FastMCP app exposing the broker-domain tools (defined in
+`mcp_server.tools` — 10 granular + 4 composite) over the streamable-http
+transport so the Foundry Agent Service `MCPStreamableHTTPTool` can
+consume them.
 
 Run locally:
     python -m mcp_server.server

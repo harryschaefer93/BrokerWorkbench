@@ -35,6 +35,10 @@ spec:
     # AGENT_/FOUNDRY_ prefixes (Foundry rejects those on hosted agents).
     - name: REASONING_EFFORT
       value: low
+    # Cap interactive output tokens (broker chat targets <300 words). Trims
+    # the slow tail of every model call. Set to 0/"default" to disable.
+    - name: CHAT_MAX_OUTPUT_TOKENS
+      value: "700"
     # MCP server inside the same Container Apps env / VNet.
     - name: MCP_SERVER_URL
       value: http://PLACEHOLDER_MCP_FQDN/mcp

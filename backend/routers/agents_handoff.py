@@ -73,18 +73,36 @@ _AGENT_NAME_MAP: dict[str, str] = {
 _HANDOFF_TIMEOUT_SECONDS = 120
 
 
+def _history_turns() -> int:
+    """Number of recent turns to replay into the prompt.
+
+    Configurable via ``CHAT_HISTORY_TURNS`` (default 6). Replaying fewer
+    turns shrinks every hosted-agent prompt — fewer input tokens means a
+    faster first token and lower throttling risk — while still preserving
+    the recent client/context the agent needs to avoid re-asking. Set to
+    0 to disable history replay entirely.
+    """
+    try:
+        n = int(os.getenv("CHAT_HISTORY_TURNS", "6"))
+    except (TypeError, ValueError):
+        return 6
+    return max(0, n)
+
+
 def _build_prompt(message: str, history: list[dict] | None) -> str:
-    """Concatenate the last 10 turns into a single prompt string.
+    """Concatenate the last ``CHAT_HISTORY_TURNS`` turns into a single prompt.
 
     Trade-off: the legacy `/agent/chat/stream` endpoint replays history as
     structured chat messages. The handoff workflow takes a single string
     input per run, so we flatten it. This loses per-turn role fidelity
-    but preserves enough context for the demo.
+    but preserves enough context for the demo. The window is capped (and
+    tunable) to keep interactive prompts small on the hosted-agent path.
     """
-    if not history:
+    turns = _history_turns()
+    if not history or turns == 0:
         return message
     lines: list[str] = []
-    for h in history[-10:]:
+    for h in history[-turns:]:
         role = h.get("role")
         content = h.get("content")
         if role in ("user", "assistant") and content:

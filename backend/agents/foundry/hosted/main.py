@@ -40,9 +40,36 @@ logger = logging.getLogger(__name__)
 # ~3x vs medium and ~10x vs high (measured on the SC gpt-5 deployment).
 _VALID_REASONING_EFFORTS = {"minimal", "low", "medium", "high"}
 
+# Default interactive output-token cap. Broker chat answers target well under
+# ~300 words; capping output tokens trims the slow tail of every model call
+# without truncating normal answers. Override with CHAT_MAX_OUTPUT_TOKENS
+# (set to 0 / "default" to fall back to the model/SDK default).
+_DEFAULT_MAX_OUTPUT_TOKENS = 700
+
+
+def _max_output_tokens() -> int | None:
+    """Return the configured interactive output-token cap, or ``None``.
+
+    Controlled by ``CHAT_MAX_OUTPUT_TOKENS`` (default 700). A value of 0,
+    a negative number, or any unparseable / "default" value omits the cap
+    so the model/SDK default applies.
+    """
+    raw = os.getenv("CHAT_MAX_OUTPUT_TOKENS")
+    if raw is None:
+        return _DEFAULT_MAX_OUTPUT_TOKENS
+    raw = raw.strip().lower()
+    if raw in ("", "default", "none"):
+        return None
+    try:
+        n = int(raw)
+    except ValueError:
+        logger.info("CHAT_MAX_OUTPUT_TOKENS=%s -> using model default", raw)
+        return None
+    return n if n > 0 else None
+
 
 def _reasoning_options() -> dict:
-    """Return Agent ``default_options`` for the configured reasoning effort.
+    """Return the ``reasoning`` slice of the Agent ``default_options``.
 
     Controlled by ``REASONING_EFFORT`` (default ``low``). Set to
     ``default`` (or any unrecognized value) to omit the option entirely and
@@ -57,6 +84,22 @@ def _reasoning_options() -> dict:
         return {}
     logger.info("Hosted agent reasoning effort capped at '%s'", effort)
     return {"reasoning": {"effort": effort}}
+
+
+def _default_options() -> dict:
+    """Assemble the Agent ``default_options`` latency policy.
+
+    Combines the reasoning-effort cap (``REASONING_EFFORT``) with the
+    output-token cap (``CHAT_MAX_OUTPUT_TOKENS``). Both are the per-turn
+    latency levers for the M365 Copilot / Teams / Web surfaces. Returns an
+    empty dict when neither is configured, so callers can pass ``or None``.
+    """
+    opts = dict(_reasoning_options())
+    max_tokens = _max_output_tokens()
+    if max_tokens is not None:
+        logger.info("Hosted agent max output tokens capped at %d", max_tokens)
+        opts["max_tokens"] = max_tokens
+    return opts
 
 
 def _build_chat_client():
@@ -150,7 +193,7 @@ async def _build_workflow_agent():
         name="brokerworkbench",
         description=cfg["description"],
         tools=mcp_tool,
-        default_options=_reasoning_options() or None,
+        default_options=_default_options() or None,
     )
 
 

@@ -21,7 +21,7 @@ graph TB
         FE["<b>Frontend</b><br/>React 18 · Vite · nginx"]
         Bot["<b>Teams Bot</b><br/>Bot Framework SDK · Python"]
         Backend["<b>Backend</b><br/>FastAPI · Python 3.11<br/><i>thin SSE proxy</i>"]
-        MCP["<b>MCP Server</b><br/>FastMCP · 10 tools<br/><i>SQL-backed</i>"]
+        MCP["<b>MCP Server</b><br/>FastMCP · 14 tools<br/><i>SQL-backed</i>"]
     end
 
     subgraph Foundry["🧠 Microsoft Foundry — Sweden Central"]

@@ -88,6 +88,11 @@ def main() -> int:
                 "REASONING_EFFORT": os.environ.get(
                     "REASONING_EFFORT", "low"
                 ),
+                # Caps interactive output tokens (broker chat targets <300
+                # words). See hosted/main.py:_max_output_tokens.
+                "CHAT_MAX_OUTPUT_TOKENS": os.environ.get(
+                    "CHAT_MAX_OUTPUT_TOKENS", "700"
+                ),
                 "LOG_LEVEL": "INFO",
             },
         ),
