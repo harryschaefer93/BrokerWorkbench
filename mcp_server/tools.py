@@ -952,9 +952,8 @@ async def get_quote_workup(
         targets = [requested]
     else:
         targets = [t for t in cov_by_type if t in VALID_PRODUCT_TYPES]
-    # De-dupe while preserving order.
-    seen: set = set()
-    targets = [t for t in targets if not (t in seen or seen.add(t))]
+    # De-dupe while preserving order (dict keys are ordered in 3.7+).
+    targets = list(dict.fromkeys(targets))
 
     comparisons: Dict[str, Any] = {}
     for pt in targets:
